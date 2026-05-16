@@ -5,23 +5,26 @@ import { db } from "@/db";
 import { users, accounts, verificationTokens } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
+type Role = "member" | "leader" | "organiser" | "admin";
+
 declare module "next-auth" {
   interface Session {
     user: {
       id: string;
-      role: "member" | "leader" | "organiser" | "admin";
+      role: Role;
       onboarded: boolean;
     } & DefaultSession["user"];
   }
 }
 
-declare module "next-auth/jwt" {
-  interface JWT {
-    id?: string;
-    role?: "member" | "leader" | "organiser" | "admin";
-    onboarded?: boolean;
-  }
-}
+// JWT shape we attach to the token. We don't `declare module "next-auth/jwt"`
+// because that augmentation is brittle across Auth.js v5 beta versions
+// (TS2664 in some setups). Casting inside the callbacks is portable.
+type AppToken = {
+  id?: string;
+  role?: Role;
+  onboarded?: boolean;
+};
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: DrizzleAdapter(db, {
@@ -42,29 +45,36 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   callbacks: {
     async jwt({ token, user, trigger }) {
-      // On sign-in, copy id from the adapter's user. On every request, refresh
-      // role + onboarded flag from the DB so promotions / onboarding completion
-      // propagate without re-login.
-      if (user) {
-        token.id = user.id;
+      const t = token as typeof token & AppToken;
+
+      // On sign-in, the adapter passes the freshly-created/loaded user.
+      if (user?.id) {
+        t.id = user.id;
       }
-      if (token.id && (trigger === "signIn" || trigger === "update" || !token.role)) {
+
+      // Refresh role + onboarded from the DB on signIn, on explicit `update`,
+      // or whenever the token doesn't yet have a role (first request after
+      // sign-in). This ensures admin promotions and onboarding completion
+      // propagate without forcing re-login.
+      if (t.id && (trigger === "signIn" || trigger === "update" || !t.role)) {
         const [row] = await db
           .select({ role: users.role, onboardedAt: users.onboardedAt })
           .from(users)
-          .where(eq(users.id, token.id))
+          .where(eq(users.id, t.id))
           .limit(1);
         if (row) {
-          token.role = row.role;
-          token.onboarded = row.onboardedAt !== null;
+          t.role = row.role;
+          t.onboarded = row.onboardedAt !== null;
         }
       }
-      return token;
+
+      return t;
     },
     async session({ session, token }) {
-      if (token.id) session.user.id = token.id;
-      if (token.role) session.user.role = token.role;
-      session.user.onboarded = token.onboarded ?? false;
+      const t = token as typeof token & AppToken;
+      if (t.id) session.user.id = t.id;
+      if (t.role) session.user.role = t.role;
+      session.user.onboarded = t.onboarded ?? false;
       return session;
     },
   },
