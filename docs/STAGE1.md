@@ -155,7 +155,7 @@ docker exec -it khcc-db psql -U khcc -d khcc \
 You're an admin now. To seed rides, exec a one-off seed script:
 
 ```bash
-docker exec khcc-web npx tsx /app/scripts/seed.ts
+docker exec khcc-web node node_modules/tsx/dist/cli.mjs scripts/seed.ts
 ```
 
 ### Subsequent deploys

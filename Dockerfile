@@ -47,12 +47,15 @@ COPY --from=builder --chown=nextjs:nodejs /app/src/db ./src/db
 # One-off scripts (seed, etc.) runnable via `docker exec khcc-web npx tsx scripts/<name>.ts`
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
-# drizzle-kit + tsx must be available at runtime to execute migrations.
+# drizzle-kit + tsx must be available at runtime to execute migrations
+# and one-off scripts (seed, etc.). We copy the package directories only —
+# the `.bin/` symlinks get dereferenced incorrectly by Docker COPY, so we
+# always call these via their direct entry-point paths instead:
+#   node ./node_modules/drizzle-kit/bin.cjs migrate
+#   node ./node_modules/tsx/dist/cli.mjs scripts/<name>.ts
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/drizzle-kit ./node_modules/drizzle-kit
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/drizzle-orm ./node_modules/drizzle-orm
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/.bin/drizzle-kit ./node_modules/.bin/drizzle-kit
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/tsx ./node_modules/tsx
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/.bin/tsx ./node_modules/.bin/tsx
 
 COPY --chown=nextjs:nodejs docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
