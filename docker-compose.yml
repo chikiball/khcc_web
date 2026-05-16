@@ -35,7 +35,10 @@ services:
       # DB — pg + drizzle-kit read these natively. Prefer PG* env vars over
       # DATABASE_URL because the URL form URL-decodes the password, breaking
       # any password that contains `+`, `/`, `=`, etc.
-      - PGHOST=db
+      # Use the container name `khcc-db` (not the service alias `db`) so we
+      # never collide with another compose project on `server-net` that also
+      # names its postgres service `db`.
+      - PGHOST=khcc-db
       - PGPORT=5432
       - PGUSER=${POSTGRES_USER:-khcc}
       - PGPASSWORD=${POSTGRES_PASSWORD}
