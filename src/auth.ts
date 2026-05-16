@@ -1,9 +1,9 @@
 import NextAuth, { type DefaultSession } from "next-auth";
-import Google from "next-auth/providers/google";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/db";
 import { users, accounts, verificationTokens } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import authConfig from "@/auth.config";
 
 type Role = "member" | "leader" | "organiser" | "admin";
 
@@ -17,9 +17,7 @@ declare module "next-auth" {
   }
 }
 
-// JWT shape we attach to the token. We don't `declare module "next-auth/jwt"`
-// because that augmentation is brittle across Auth.js v5 beta versions
-// (TS2664 in some setups). Casting inside the callbacks is portable.
+// Local JWT shape — augmenting "next-auth/jwt" is brittle across v5 betas.
 type AppToken = {
   id?: string;
   role?: Role;
@@ -27,35 +25,18 @@ type AppToken = {
 };
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   adapter: DrizzleAdapter(db, {
     usersTable: users,
     accountsTable: accounts,
     verificationTokensTable: verificationTokens,
-    // No sessions table — JWT strategy doesn't need one.
   }),
   session: { strategy: "jwt" },
-  providers: [
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
-    }),
-  ],
-  pages: {
-    signIn: "/login",
-  },
   callbacks: {
+    ...authConfig.callbacks,
     async jwt({ token, user, trigger }) {
       const t = token as typeof token & AppToken;
-
-      // On sign-in, the adapter passes the freshly-created/loaded user.
-      if (user?.id) {
-        t.id = user.id;
-      }
-
-      // Refresh role + onboarded from the DB on signIn, on explicit `update`,
-      // or whenever the token doesn't yet have a role (first request after
-      // sign-in). This ensures admin promotions and onboarding completion
-      // propagate without forcing re-login.
+      if (user?.id) t.id = user.id;
       if (t.id && (trigger === "signIn" || trigger === "update" || !t.role)) {
         const [row] = await db
           .select({ role: users.role, onboardedAt: users.onboardedAt })
@@ -67,7 +48,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           t.onboarded = row.onboardedAt !== null;
         }
       }
-
       return t;
     },
     async session({ session, token }) {

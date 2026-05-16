@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/auth-helpers";
 import { RsvpButton } from "@/components/rsvp-button";
@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function RideDetailPage({ params }: { params: Params }) {
   const { id } = await params;
   const user = await requireUser();
+  if (!user.onboarded) redirect("/onboarding");
 
   const [ride] = await db
     .select()

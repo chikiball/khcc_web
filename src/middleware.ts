@@ -1,37 +1,14 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { auth } from "@/auth";
+import NextAuth from "next-auth";
+import authConfig from "@/auth.config";
 
-const PROTECTED = ["/rides", "/onboarding"];
+// Edge-safe middleware: uses only the lightweight config (no DB adapter).
+// The `authorized` callback in auth.config.ts handles the protected-path
+// gate. Anything that needs the role / onboarded fields runs in Server
+// Components or Server Actions where the full `auth()` from auth.ts is
+// available.
+export const { auth: middleware } = NextAuth(authConfig);
 
-export default auth(async function middleware(request: NextRequest & { auth: unknown }) {
-  const { pathname } = request.nextUrl;
-  const session = (request as unknown as { auth: { user?: { onboarded?: boolean } } | null }).auth;
-  const user = session?.user;
-
-  const requiresAuth = PROTECTED.some((p) => pathname.startsWith(p));
-
-  if (requiresAuth && !user) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
-  }
-
-  if (user && pathname === "/login") {
-    const url = request.nextUrl.clone();
-    url.pathname = user.onboarded ? "/rides" : "/onboarding";
-    return NextResponse.redirect(url);
-  }
-
-  // Onboarding gate: signed-in but profile not complete → onboarding only
-  if (user && !user.onboarded && pathname.startsWith("/rides")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/onboarding";
-    return NextResponse.redirect(url);
-  }
-
-  return NextResponse.next();
-});
+export default middleware;
 
 export const config = {
   matcher: [
