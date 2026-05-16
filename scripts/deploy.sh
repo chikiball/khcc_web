@@ -29,6 +29,28 @@ for i in $(seq 1 20); do
   sleep 3
 done
 
+echo "--- syncing db role password with .env ---"
+# postgres only honours POSTGRES_PASSWORD on FIRST volume init. Without this
+# step, any later change to POSTGRES_PASSWORD in .env would leave the stored
+# role password stale and silently break khcc-web auth. Idempotent — runs
+# every deploy. Uses psql's :'var' interpolation so the password is properly
+# escaped even if it contains quotes or backslashes.
+PW=$(grep '^POSTGRES_PASSWORD=' .env | cut -d= -f2-)
+DB_USER=$(grep '^POSTGRES_USER=' .env | cut -d= -f2-)
+DB_NAME=$(grep '^POSTGRES_DB=' .env | cut -d= -f2-)
+DB_USER=${DB_USER:-khcc}
+DB_NAME=${DB_NAME:-khcc}
+
+if [ -z "$PW" ]; then
+  echo "ERROR: POSTGRES_PASSWORD is empty in .env — aborting deploy"
+  exit 1
+fi
+
+docker exec -i khcc-db psql -U "$DB_USER" -d "$DB_NAME" -v ROLEPASS="$PW" >/dev/null <<SQL
+ALTER USER "$DB_USER" WITH PASSWORD :'ROLEPASS';
+SQL
+echo "--- role password in sync ---"
+
 echo "--- docker build ---"
 docker compose build khcc-web
 
