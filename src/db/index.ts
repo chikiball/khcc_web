@@ -7,10 +7,16 @@ declare global {
   var __pgPool: Pool | undefined;
 }
 
+// We deliberately omit `connectionString` when DATABASE_URL is not set so that
+// pg falls back to the standard PG* env vars (PGHOST, PGUSER, PGPASSWORD,
+// PGDATABASE, PGPORT). This avoids URL-encoding pitfalls in passwords that
+// contain `+`, `/`, `=`, or other characters with special meaning in URIs.
 const pool =
   globalThis.__pgPool ??
   new Pool({
-    connectionString: process.env.DATABASE_URL,
+    ...(process.env.DATABASE_URL
+      ? { connectionString: process.env.DATABASE_URL }
+      : {}),
     max: 10,
   });
 
