@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { notFound } from "next/navigation";
+import { db, schema } from "@/db";
+import { requireUser } from "@/lib/auth-helpers";
 import { RsvpButton } from "@/components/rsvp-button";
 import { PaceBadge } from "@/components/ride-card";
+import { and, eq } from "drizzle-orm";
 
 type Params = Promise<{ id: string }>;
 
@@ -10,27 +12,37 @@ export const dynamic = "force-dynamic";
 
 export default async function RideDetailPage({ params }: { params: Params }) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const user = await requireUser();
 
-  const { data: ride } = await supabase
-    .from("rides")
-    .select("id, title, starts_at, start_point_name, distance_km, elevation_m, pace_group, route_url, description, status")
-    .eq("id", id)
-    .maybeSingle();
+  const [ride] = await db
+    .select()
+    .from(schema.rides)
+    .where(eq(schema.rides.id, id))
+    .limit(1);
 
   if (!ride) notFound();
 
-  const { data: rsvps } = await supabase
-    .from("ride_rsvps")
-    .select("user_id, profiles!inner(display_name, avatar_url, pace_group)")
-    .eq("ride_id", id)
-    .eq("status", "in")
-    .order("created_at", { ascending: true });
+  const rsvps = await db
+    .select({
+      userId: schema.rideRsvps.userId,
+      name: schema.users.name,
+      image: schema.users.image,
+      paceGroup: schema.users.paceGroup,
+      createdAt: schema.rideRsvps.createdAt,
+    })
+    .from(schema.rideRsvps)
+    .innerJoin(schema.users, eq(schema.users.id, schema.rideRsvps.userId))
+    .where(
+      and(
+        eq(schema.rideRsvps.rideId, id),
+        eq(schema.rideRsvps.status, "in"),
+      ),
+    )
+    .orderBy(schema.rideRsvps.createdAt);
 
-  const isIn = !!rsvps?.some((r) => r.user_id === user.id);
-  const start = new Date(ride.starts_at);
+  const isIn = rsvps.some((r) => r.userId === user.id);
+  const start = new Date(ride.startsAt);
+  const distance = ride.distanceKm != null ? Number(ride.distanceKm) : null;
 
   return (
     <main className="min-h-dvh bg-paper text-ink">
@@ -55,15 +67,15 @@ export default async function RideDetailPage({ params }: { params: Params }) {
             <h1 className="font-display text-3xl font-bold mt-1 leading-tight">
               {ride.title}
             </h1>
-            <p className="text-base text-ink-soft mt-2">{ride.start_point_name}</p>
+            <p className="text-base text-ink-soft mt-2">{ride.startPointName}</p>
           </div>
-          <PaceBadge pace={ride.pace_group as "A" | "B" | "C"} />
+          <PaceBadge pace={ride.paceGroup} />
         </div>
 
         <dl className="mt-6 grid grid-cols-3 gap-2 text-center">
-          <Stat label="km" value={ride.distance_km} />
-          <Stat label="m up" value={ride.elevation_m} />
-          <Stat label="riders" value={rsvps?.length ?? 0} />
+          <Stat label="km" value={distance} />
+          <Stat label="m up" value={ride.elevationM} />
+          <Stat label="riders" value={rsvps.length} />
         </dl>
 
         {ride.description && (
@@ -72,9 +84,9 @@ export default async function RideDetailPage({ params }: { params: Params }) {
           </p>
         )}
 
-        {ride.route_url && (
+        {ride.routeUrl && (
           <a
-            href={ride.route_url}
+            href={ride.routeUrl}
             target="_blank"
             rel="noreferrer"
             className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-coral-700 hover:text-coral-800 underline underline-offset-4"
@@ -85,29 +97,26 @@ export default async function RideDetailPage({ params }: { params: Params }) {
 
         <section className="mt-8">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-ink-soft">
-            Riding ({rsvps?.length ?? 0})
+            Riding ({rsvps.length})
           </h2>
           <ul className="mt-3 flex flex-wrap gap-2">
-            {rsvps?.length ? (
-              rsvps.map((r) => {
-                const p = r.profiles as unknown as { display_name: string; avatar_url: string | null };
-                return (
-                  <li
-                    key={r.user_id}
-                    className="inline-flex items-center gap-2 rounded-full bg-white ring-1 ring-maroon-200/60 pl-1 pr-3 py-1"
-                  >
-                    {p.avatar_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.avatar_url} alt="" className="size-7 rounded-full object-cover" />
-                    ) : (
-                      <span className="size-7 rounded-full bg-coral-200 text-coral-800 inline-flex items-center justify-center text-xs font-bold">
-                        {p.display_name[0]?.toUpperCase()}
-                      </span>
-                    )}
-                    <span className="text-sm text-ink">{p.display_name}</span>
-                  </li>
-                );
-              })
+            {rsvps.length ? (
+              rsvps.map((r) => (
+                <li
+                  key={r.userId}
+                  className="inline-flex items-center gap-2 rounded-full bg-white ring-1 ring-maroon-200/60 pl-1 pr-3 py-1"
+                >
+                  {r.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={r.image} alt="" className="size-7 rounded-full object-cover" />
+                  ) : (
+                    <span className="size-7 rounded-full bg-coral-200 text-coral-800 inline-flex items-center justify-center text-xs font-bold">
+                      {(r.name ?? "?")[0]?.toUpperCase()}
+                    </span>
+                  )}
+                  <span className="text-sm text-ink">{r.name ?? "Rider"}</span>
+                </li>
+              ))
             ) : (
               <li className="text-sm text-ink-soft">Be the first.</li>
             )}
@@ -115,7 +124,6 @@ export default async function RideDetailPage({ params }: { params: Params }) {
         </section>
       </article>
 
-      {/* Sticky RSVP bar — always reachable on mobile, ≥44pt tap */}
       <div className="fixed bottom-0 inset-x-0 bg-paper/95 backdrop-blur ring-1 ring-maroon-200/60 px-5 py-4">
         <div className="max-w-xl mx-auto flex items-center justify-between gap-4">
           <span className="text-sm text-ink-soft">
@@ -131,9 +139,7 @@ export default async function RideDetailPage({ params }: { params: Params }) {
 function Stat({ label, value }: { label: string; value: number | null }) {
   return (
     <div className="rounded-2xl bg-white ring-1 ring-maroon-200/60 py-3">
-      <dd className="font-display text-2xl font-bold text-ink">
-        {value ?? "—"}
-      </dd>
+      <dd className="font-display text-2xl font-bold text-ink">{value ?? "—"}</dd>
       <dt className="text-xs uppercase tracking-wider text-ink-soft">{label}</dt>
     </div>
   );

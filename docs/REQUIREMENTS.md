@@ -197,8 +197,8 @@ Role assignments are set in the Admin area. A single user may hold multiple role
 
 ### 6.4 Security & Privacy
 - **NFR-11** All traffic over HTTPS/TLS 1.2+.
-- **NFR-12** Auth via Supabase Auth (password-less, OAuth). No plaintext passwords stored.
-- **NFR-13** Row-Level Security (RLS) on all Postgres tables. Emergency contact visible only to authorised roles.
+- **NFR-12** Auth via Auth.js (NextAuth v5) with Google OAuth, JWT sessions. No plaintext passwords stored.
+- **NFR-13** Application-level authorization with private fields isolated in a separate table (`users_private`) so any query that doesn't explicitly join cannot leak emergency-contact data. Centralised `requireUser` / `requireAdmin` helpers in `src/lib/auth-helpers.ts`.
 - **NFR-14** PDPA-aligned: members can export and delete their data on request.
 - **NFR-15** Strava tokens encrypted at rest.
 - **NFR-16** Audit log for admin actions (role changes, ride cancellations, member removals).
@@ -245,12 +245,15 @@ High-level entities — full schema in `docs/SCHEMA.md` (TBD):
 
 | Layer | Choice | Why |
 |---|---|---|
-| Framework | Next.js 15 (App Router) + TypeScript | SSR, strong DX, Vercel-native |
+| Framework | Next.js 15 (App Router) + TypeScript | SSR, strong DX |
 | UI | Tailwind CSS v4 + shadcn/ui (when needed) | Fast iteration, accessible primitives |
-| Database & Auth | Supabase (Postgres, Auth, Storage, Realtime) | Single managed backend, RLS built-in |
+| Database | **Self-hosted Postgres 16 in Docker** (no managed service) | Zero external dependency, unlimited users always free |
+| ORM / migrations | Drizzle ORM + drizzle-kit | Type-safe queries, schema-as-TS, idiomatic Next.js |
+| Auth | Auth.js v5 (NextAuth) with Google OAuth + Drizzle adapter, JWT sessions | Self-managed, no third-party identity service |
+| Authorization | Application-level (no RLS) — `requireUser` helpers + private fields split into `users_private` table | Simpler without Supabase auth context; defence-in-depth via table split |
 | Maps | Mapbox GL (or Leaflet fallback) | GPX rendering, offline tile option *(deferred past Stage 1)* |
 | External APIs | Strava, OpenWeather, Resend | Core integrations *(deferred past Stage 1)* |
-| Hosting | **Stage 1: home server (`khcc.nandharu.uk`)** behind nginx → Vercel later | Temporary self-host while shaping the app; move to Vercel before scaling |
+| Hosting | **Home server (`khcc.nandharu.uk`)** behind nginx, Docker Compose on `server-net` | Self-hosted indefinitely; no managed-service costs |
 | PWA | `@ducanh2912/next-pwa` | Offline caching, installable (maintained fork of `next-pwa`) |
 | Analytics | PostHog (self-hosted option) | Privacy-friendly usage insights *(deferred past Stage 1)* |
 

@@ -1,26 +1,30 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { db, schema } from "@/db";
+import { requireUser } from "@/lib/auth-helpers";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { and, eq } from "drizzle-orm";
 
 export async function toggleRsvp(rideId: string, currentlyIn: boolean) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const user = await requireUser();
 
   if (currentlyIn) {
-    const { error } = await supabase
-      .from("ride_rsvps")
-      .delete()
-      .eq("ride_id", rideId)
-      .eq("user_id", user.id);
-    if (error) throw error;
+    await db
+      .delete(schema.rideRsvps)
+      .where(
+        and(
+          eq(schema.rideRsvps.rideId, rideId),
+          eq(schema.rideRsvps.userId, user.id),
+        ),
+      );
   } else {
-    const { error } = await supabase
-      .from("ride_rsvps")
-      .upsert({ ride_id: rideId, user_id: user.id, status: "in" });
-    if (error) throw error;
+    await db
+      .insert(schema.rideRsvps)
+      .values({ rideId, userId: user.id, status: "in" })
+      .onConflictDoUpdate({
+        target: [schema.rideRsvps.rideId, schema.rideRsvps.userId],
+        set: { status: "in", updatedAt: new Date() },
+      });
   }
 
   revalidatePath("/rides");

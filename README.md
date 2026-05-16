@@ -2,9 +2,11 @@
 
 **Knock House Chop Chop** — a fast-pace road cycling club. PWA for ride coordination.
 
+Fully self-hosted, zero managed dependencies. Postgres + Auth.js + Next.js, all in Docker on a home server.
+
 ## Stack
 
-Next.js 15 (App Router) + TypeScript · Tailwind v4 · Supabase (Auth, Postgres, RLS, Storage) · `@ducanh2912/next-pwa` · Google OAuth.
+Next.js 15 (App Router) + TypeScript · Tailwind v4 · **Postgres 16 in Docker** · **Drizzle ORM** · **Auth.js v5** (Google OAuth) · `@ducanh2912/next-pwa`.
 
 ## Local development
 
@@ -14,20 +16,22 @@ npm install
 
 # 2. Configure environment
 cp .env.example .env.local
-# Fill in NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY,
-# SUPABASE_SERVICE_ROLE_KEY, NEXT_PUBLIC_SITE_URL.
+# Fill in: POSTGRES_PASSWORD, AUTH_SECRET (openssl rand -base64 32),
+# AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET, NEXT_PUBLIC_SITE_URL.
 
-# 3. Push the schema to your Supabase project
-#    (assumes Supabase CLI installed and `supabase login` already run)
-npx supabase link --project-ref <your-project-ref>
-npx supabase db push
+# 3. Start Postgres locally (Docker)
+docker run -d --name khcc-db-local \
+  -e POSTGRES_USER=khcc -e POSTGRES_PASSWORD=khcc -e POSTGRES_DB=khcc \
+  -p 5432:5432 postgres:16-alpine
 
-# 4. Run dev server
+# 4. Push schema + seed sample rides
+npm run db:push
+npx tsx scripts/seed.ts
+
+# 5. Run dev server
 npm run dev
 # open http://localhost:3000
 ```
-
-Other scripts:
 
 | Command | What it does |
 |---|---|
@@ -36,30 +40,31 @@ Other scripts:
 | `npm run start` | Run built app on :3030 (the prod port behind nginx) |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm run db:diff` | Generate a new migration from local Supabase changes |
-| `npm run db:types` | Regenerate `src/types/database.ts` from Supabase schema |
+| `npm run db:generate` | Generate SQL migration from `src/db/schema.ts` changes |
+| `npm run db:migrate` | Apply pending migrations |
+| `npm run db:push` | Push schema directly (dev shortcut, no migration file) |
+| `npm run db:studio` | Open Drizzle Studio (DB GUI) |
+| `npx tsx scripts/seed.ts` | Seed 3 sample rides (idempotent) |
 
-## Supabase Cloud setup (one-time)
+## Google OAuth setup (one-time)
 
-1. Create a new project at https://supabase.com — copy the project ref, anon key, service role key into `.env.local`.
-2. Push migrations: `npx supabase db push` (after linking).
-3. **Google OAuth** — Authentication → Providers → Google:
-   - Create OAuth credentials in Google Cloud Console.
-   - Authorised redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`
-   - Paste Client ID + Secret into Supabase.
-4. **Auth URLs** — Authentication → URL Configuration:
-   - Site URL: `https://khcc.nandharu.uk` (or `http://localhost:3000` for dev)
-   - Redirect URLs: add both prod + local.
+1. Google Cloud Console → APIs & Services → Credentials → Create OAuth client ID (Web application).
+2. Authorised redirect URIs:
+   - `http://localhost:3000/api/auth/callback/google` (local dev)
+   - `https://khcc.nandharu.uk/api/auth/callback/google` (prod)
+3. Copy the Client ID and Client Secret into `.env.local` as `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET`.
 
-## Deployment (home server, temporary)
+No third-party identity service. The only thing leaving your server is the OAuth handshake to Google, and only on sign-in.
 
-Target: `khcc.nandharu.uk`. Eventually moves to Vercel — see `docs/REQUIREMENTS.md` §8.
+## Deployment (home server)
+
+Target: `khcc.nandharu.uk`. Two containers on the existing `server-net` Docker network: `khcc-db` (Postgres 16) and `khcc-web` (Next.js).
 
 ```bash
 # On the home server, in the repo root:
-cp .env.example .env  # fill in Supabase + site URL
+cp .env.example .env  # fill in the production secrets
 
-# First time only — drop the nginx snippet into the upstream nginx conf.d/
+# First time only — drop the nginx snippet into the upstream nginx
 sudo cp nginx/khcc.conf /etc/nginx/conf.d/khcc.conf
 sudo nginx -t && sudo nginx -s reload
 
@@ -67,16 +72,6 @@ sudo nginx -t && sudo nginx -s reload
 ./scripts/deploy.sh
 ```
 
+The deploy script brings up `db` first, waits for healthy, then builds and starts `khcc-web`. Migrations run automatically on container start (via `docker/entrypoint.sh`).
+
 Full step-by-step setup is in `docs/STAGE1.md`.
-
-## What's in here
-
-- `src/app/` — App Router pages: `/`, `/login`, `/auth/callback`, `/onboarding`, `/rides`, `/rides/[id]`
-- `src/lib/supabase/` — `client`, `server`, `middleware` — the standard `@supabase/ssr` setup
-- `src/middleware.ts` — auth gate for `/rides` and `/onboarding`, redirects signed-in users away from `/login`
-- `src/components/` — `google-sign-in`, `rsvp-button`, `ride-card`
-- `supabase/migrations/` — schema (profiles, profiles_private, rides, ride_rsvps) with RLS on every table
-- `supabase/seed.sql` — sample rides for local dev
-- `public/gallery/` — landing-page photos (curated subset of `image_src/`)
-- `docs/REQUIREMENTS.md` — full requirements (living doc)
-- `docs/STAGE1.md` — what's in Stage 1 vs deferred

@@ -1,28 +1,15 @@
 "use client";
 
-import { createClient } from "@/lib/supabase/client";
+import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 
 export function GoogleSignIn() {
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/rides";
 
-  const handleSignIn = async () => {
-    const supabase = createClient();
-    const siteUrl =
-      process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
-
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(next)}`,
-      },
-    });
-  };
-
   return (
     <button
-      onClick={handleSignIn}
+      onClick={() => signIn("google", { callbackUrl: next })}
       className="w-full inline-flex items-center justify-center gap-3 rounded-2xl bg-white px-6 py-3 text-base font-medium text-maroon-800 shadow-sm ring-1 ring-maroon-200 hover:bg-cream-50 active:scale-[0.98] transition-transform"
     >
       <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth-helpers";
 
 const galleryPhotos = [
   { src: "/gallery/01-new-kit.jpg", alt: "KHCC new kit ride" },
@@ -13,14 +13,11 @@ const galleryPhotos = [
 ];
 
 export default async function LandingPage() {
-  // If already signed in, skip the landing entirely.
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (user) redirect("/rides");
+  const user = await getCurrentUser();
+  if (user) redirect(user.onboarded ? "/rides" : "/onboarding");
 
   return (
     <main className="min-h-dvh bg-paper text-ink">
-      {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="brush-divider absolute inset-0 opacity-60" aria-hidden="true" />
         <div className="relative max-w-2xl mx-auto px-6 pt-20 pb-16 text-center">
@@ -53,10 +50,9 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* Gallery strip */}
-      <section className="overflow-x-auto scrollbar-thin">
+      <section className="overflow-x-auto">
         <div className="flex gap-3 px-6 pb-8 snap-x snap-mandatory">
-          {galleryPhotos.map((photo) => (
+          {galleryPhotos.map((photo, i) => (
             <div
               key={photo.src}
               className="relative shrink-0 w-[78vw] sm:w-72 aspect-square rounded-2xl overflow-hidden snap-start ring-1 ring-maroon-200"
@@ -67,18 +63,15 @@ export default async function LandingPage() {
                 fill
                 sizes="(max-width: 640px) 78vw, 288px"
                 className="object-cover"
-                priority={photo.src === galleryPhotos[0].src}
+                priority={i === 0}
               />
             </div>
           ))}
         </div>
       </section>
 
-      {/* What is KHCC */}
       <section id="what" className="max-w-2xl mx-auto px-6 py-16">
-        <h2 className="font-display text-3xl font-bold text-ink">
-          What it is.
-        </h2>
+        <h2 className="font-display text-3xl font-bold text-ink">What it is.</h2>
         <div className="mt-6 space-y-4 text-ink-soft text-base leading-relaxed">
           <p>
             <strong className="text-ink">KHCC</strong> — Knock House Chop Chop —

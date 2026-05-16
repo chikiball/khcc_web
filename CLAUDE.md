@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **KHCC Web** — a Progressive Web App for **Knock House Chop Chop** (cycling club). The "chop chop" identity drives UI tone: terse copy ("In" / "Out" / "Rolling" / "Done"), minimal-tap interactions, no chatty microcopy. Replaces WhatsApp + spreadsheets for ride coordination.
 
-Stage 1 is shipped (code-complete; awaiting Supabase project + Google OAuth credentials before first deploy). See `docs/STAGE1.md` for what's in Stage 1 vs deferred. Full requirements in `docs/REQUIREMENTS.md`.
+Stage 1 is shipped (code-complete). See `docs/STAGE1.md` for what's in Stage 1 vs deferred. Full requirements in `docs/REQUIREMENTS.md`.
 
 ## Commands
 
@@ -17,32 +17,43 @@ npm run build          # production build
 npm run start          # run built app on :3030 (the prod port behind nginx)
 npm run lint           # ESLint
 npm run typecheck      # tsc --noEmit
-npm run db:diff        # generate migration from local Supabase changes
-npm run db:types       # regenerate src/types/database.ts from schema
+npm run db:generate    # drizzle-kit: generate SQL migration from schema.ts changes
+npm run db:migrate     # drizzle-kit: apply pending migrations against DATABASE_URL
+npm run db:push        # drizzle-kit: push schema directly (dev shortcut, no migration file)
+npm run db:studio      # drizzle-kit: open the DB GUI
+npx tsx scripts/seed.ts   # seed sample rides (idempotent — skips if non-empty)
 ```
 
 Single test: no test runner wired up yet — add Vitest when the first test arrives (REQUIREMENTS NFR-24 targets ≥60% coverage on RSVP/waitlist/auth-guards).
 
-Supabase Cloud setup steps (one-time, per environment) live in `README.md`.
-
 ## Architecture
 
-**Stack:** Next.js 15 App Router + TypeScript strict · Tailwind v4 (config in `src/app/globals.css` via `@theme`) · Supabase (Auth + Postgres + RLS + Storage) · `@ducanh2912/next-pwa` · Google OAuth.
+**Stack — fully self-hosted, zero managed dependencies:** Next.js 15 App Router + TypeScript strict · Tailwind v4 (config in `src/app/globals.css` via `@theme`) · **Postgres 16 in Docker** · **Drizzle ORM** for queries + migrations · **Auth.js v5 (NextAuth)** with Google OAuth provider + Drizzle adapter, JWT session strategy · `@ducanh2912/next-pwa`. No Supabase, no Vercel, no Resend, no third-party identity service.
 
-**Auth flow:** `/login` → Google OAuth → `/auth/callback` (exchange code for session) → either `/onboarding` (if `profiles.onboarded_at` is null) or `/rides`. The middleware (`src/middleware.ts` → `src/lib/supabase/middleware.ts`) gates `/rides` and `/onboarding`, refreshes the session cookie on every request, and bounces signed-in users away from `/login`. **Never remove the `getUser()` call in `updateSession`** — it's what keeps the session cookie fresh.
+**Auth flow:** `/login` → Auth.js `signIn("google", { callbackUrl })` → Google → `/api/auth/callback/google` (Auth.js handles) → middleware sees the session and routes:
+- new user (`onboardedAt` is null) → `/onboarding`
+- existing user → `/rides`
 
-**Three Supabase clients, three contexts:**
-- `src/lib/supabase/client.ts` — browser components (`"use client"`)
-- `src/lib/supabase/server.ts` — Server Components, Route Handlers, Server Actions (`await createClient()`)
-- `src/lib/supabase/middleware.ts` — Edge middleware only
+The session JWT carries `id`, `role`, and `onboarded` — refreshed from the DB on every JWT callback so role promotions and onboarding completion propagate without re-login. **Don't read role from the JWT for security-critical decisions in long-running requests** — always fetch the latest from `users` table when you mutate.
 
-Mixing them up causes auth-cookie bugs that look like "user is null at random". Stick to the right client per context.
+**Auth helpers — use these, don't roll your own:**
+- `getCurrentUser()` returns the session user or null
+- `requireUser()` redirects to `/login` if not signed in
+- `requireAdmin()` redirects to `/rides` if not admin
+- `canManageRides(role)` for `leader | organiser | admin` checks
 
-**Authorization model — RLS-first.** Every table has RLS enabled. `profiles` is broadly readable; `profiles_private` (emergency contact) is locked to self + admin. `rides` write is `leader`/`organiser`/`admin` only. `ride_rsvps` is "own row only" for write. **Do not add a table without an RLS policy.** Server Actions and Route Handlers should still rely on RLS to fail closed — never use the service role key in user-facing code paths.
+All in `src/lib/auth-helpers.ts`.
 
-**Privacy split.** Emergency contact lives in `profiles_private`, not `profiles`, so RLS can keep it simple. When a future stage needs ride leaders to see a rider's emergency contact, add a `security definer` function (`get_emergency_contact(rider_id)`) that checks "am I the leader of a ride this user is RSVP'd to?" — don't try to express that in raw RLS, and don't denormalise the field back into `profiles`.
+**Authorization model — application-level, not RLS.** Postgres has RLS but it's not used because we don't have a managed auth context (Supabase's `auth.uid()`) to key off. Every Server Action / Server Component that touches user data calls `requireUser()` first and scopes queries by `user.id`. The two non-obvious rules:
 
-**Auto-profile on signup.** The `handle_new_user` trigger inserts `profiles` + `profiles_private` rows whenever `auth.users` gets a new row, with `pace_group='B'` as a default. Onboarding then UPDATES (not INSERTs) and stamps `onboarded_at`. Don't try to create profiles client-side.
+1. **Emergency contact lives in `users_private`**, separate from `users`. Any query against `users` cannot leak it. The only place that should join or select from `users_private` is an explicit "is admin or is the row owner" check. Never widen this.
+2. **Mutations that change someone else's data** (e.g. an admin promoting a user, a leader cancelling a ride) must re-check role from the DB at action time — don't trust the session JWT for these.
+
+**Drizzle conventions:**
+- Schema is the source of truth: `src/db/schema.ts`. Don't hand-write migrations.
+- After changing schema: `npm run db:generate` produces a SQL file in `drizzle/`. Commit it.
+- The Docker entrypoint runs `drizzle-kit migrate` before Next.js starts — production migrations are automatic on deploy. Local dev uses `npm run db:push` for fast iteration.
+- Single shared pool in `src/db/index.ts`. Don't `new Pool()` anywhere else.
 
 **Brand & UI conventions** (derived from team kit photos in `image_src/`):
 - Palette in `src/app/globals.css` `@theme` block — coral pink `coral-*`, deep maroon `maroon-*`, coral red `flash-*`, cream `cream-*`. Use the semantic aliases (`brand`, `ink`, `paper`) where possible.
@@ -51,7 +62,9 @@ Mixing them up causes auth-cookie bugs that look like "user is null at random". 
 - Pace group is **never colour-only** (NFR-6) — `<PaceBadge>` always renders the letter.
 - Tap targets ≥ 44px enforced via global `button { min-height: 44px }` (gloves — NFR-5).
 
-**Deployment.** `khcc.nandharu.uk` on home server is the *temporary* target (Stage 1). The plan is to move to Vercel later. Container build via `Dockerfile` (multi-stage, Next.js `output: "standalone"`); orchestration via `docker-compose.yml` on the external `server-net` network; reverse-proxied by an upstream nginx via `nginx/khcc.conf`. Deploy with `scripts/deploy.sh`. **`NEXT_PUBLIC_*` env vars are baked into client bundles at build time** — they're passed as `args:` in `docker-compose.yml` and as `ARG` in the Dockerfile builder stage. Server-only secrets (`SUPABASE_SERVICE_ROLE_KEY`) are runtime-only and stay out of the image.
+**Deployment.** `khcc.nandharu.uk` on the home server. Two containers on the external `server-net` Docker network: `khcc-db` (Postgres 16, named volume `khcc_db_data`) and `khcc-web` (Next.js standalone build). Reverse-proxied by an upstream nginx via `nginx/khcc.conf`. Migrations run automatically on container start via `docker/entrypoint.sh` before Next.js boots. Deploy with `scripts/deploy.sh`.
+
+**Build-time vs runtime env.** Auth.js secrets, DB URL, Google client secret are runtime-only — never baked into the image. `NEXT_PUBLIC_SITE_URL` and `AUTH_GOOGLE_ID` (the public ID is fine to expose) are passed as build args because the Auth.js client uses them in browser bundles.
 
 ## Cross-cutting constraints (still apply from REQUIREMENTS)
 
@@ -63,7 +76,8 @@ Mixing them up causes auth-cookie bugs that look like "user is null at random". 
 
 ## Don't
 
-- Don't propose Vercel/Mapbox/Resend before they're needed — Stage 1 has none of them. Add when scope demands.
+- Don't reach for a managed service (Supabase, Vercel KV, Clerk, Auth0, Resend) — the explicit goal is zero managed dependencies.
 - Don't add features from REQUIREMENTS Phase 2/3 (trips, Strava, races, leaderboard, live safety, incidents) into Stage 1 — they're deliberately deferred.
-- Don't replace `@supabase/ssr` with the raw `@supabase/supabase-js` client in components — the SSR package handles cookie sync.
-- Don't expose `SUPABASE_SERVICE_ROLE_KEY` to the browser. It's server-only, intended for admin scripts.
+- Don't hand-write SQL migrations. Edit `src/db/schema.ts` and run `npm run db:generate`.
+- Don't read emergency contact except through an explicit admin-or-self check that joins `users_private`.
+- Don't put `AUTH_SECRET`, `AUTH_GOOGLE_SECRET`, `DATABASE_URL`, or `POSTGRES_PASSWORD` into Dockerfile `ARG` — they're runtime env only.

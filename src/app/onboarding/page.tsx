@@ -1,21 +1,27 @@
-import { createClient } from "@/lib/supabase/server";
+import { db, schema } from "@/db";
+import { requireUser } from "@/lib/auth-helpers";
 import { redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { completeOnboarding } from "./actions";
 
 export const metadata = { title: "Welcome" };
 
 export default async function OnboardingPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const user = await requireUser();
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("display_name, pace_group, bike, strava_handle, onboarded_at")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [profile] = await db
+    .select({
+      name: schema.users.name,
+      paceGroup: schema.users.paceGroup,
+      bike: schema.users.bike,
+      stravaHandle: schema.users.stravaHandle,
+      onboardedAt: schema.users.onboardedAt,
+    })
+    .from(schema.users)
+    .where(eq(schema.users.id, user.id))
+    .limit(1);
 
-  if (profile?.onboarded_at) redirect("/rides");
+  if (profile?.onboardedAt) redirect("/rides");
 
   return (
     <main className="min-h-dvh bg-paper text-ink">
@@ -35,7 +41,7 @@ export default async function OnboardingPage() {
             label="Display name"
             name="display_name"
             required
-            defaultValue={profile?.display_name ?? ""}
+            defaultValue={profile?.name ?? user.name ?? ""}
             placeholder="Wei"
           />
 
@@ -54,7 +60,7 @@ export default async function OnboardingPage() {
                     type="radio"
                     name="pace_group"
                     value={p}
-                    defaultChecked={(profile?.pace_group ?? "B") === p}
+                    defaultChecked={(profile?.paceGroup ?? "B") === p}
                     className="sr-only"
                   />
                   <span className="font-display font-bold text-xl">{p}</span>
@@ -73,7 +79,7 @@ export default async function OnboardingPage() {
           <Field
             label="Strava handle"
             name="strava_handle"
-            defaultValue={profile?.strava_handle ?? ""}
+            defaultValue={profile?.stravaHandle ?? ""}
             placeholder="@khcc.rider — optional"
           />
 

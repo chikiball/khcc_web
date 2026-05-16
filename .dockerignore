@@ -12,3 +12,6 @@ public/gallery/*.jpg.bak
 .DS_Store
 .vercel
 coverage
+
+# Don't copy host build artifacts / state into the image
+drizzle/meta/_journal.json.bak

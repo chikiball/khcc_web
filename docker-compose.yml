@@ -1,21 +1,51 @@
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: khcc-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-khcc}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-khcc}
+    volumes:
+      - khcc_db_data:/var/lib/postgresql/data
+    networks:
+      - server-net
+    mem_limit: 512m
+    cpus: 0.5
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "pg_isready -U ${POSTGRES_USER:-khcc} -d ${POSTGRES_DB:-khcc}"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   khcc-web:
     build:
       context: .
       args:
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID}
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://khcc.nandharu.uk}
     container_name: khcc-web
     restart: unless-stopped
     environment:
-      # Public — also baked into client bundle at build time, mirrored here for
-      # server-side reads.
-      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - NODE_ENV=production
+      # DB — Drizzle / pg
+      - DATABASE_URL=postgres://${POSTGRES_USER:-khcc}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-khcc}
+      # Auth.js
+      - AUTH_SECRET=${AUTH_SECRET}
+      - AUTH_GOOGLE_ID=${AUTH_GOOGLE_ID}
+      - AUTH_GOOGLE_SECRET=${AUTH_GOOGLE_SECRET}
+      - AUTH_URL=${NEXT_PUBLIC_SITE_URL:-https://khcc.nandharu.uk}
+      - AUTH_TRUST_HOST=true
+      # Public (server-side reads only — Next.js bakes NEXT_PUBLIC_* into the
+      # client bundle at build time via build args above)
       - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-https://khcc.nandharu.uk}
-      # Server-only — never exposed to the browser.
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
     networks:
       - server-net
     mem_limit: 1g
@@ -30,6 +60,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+volumes:
+  khcc_db_data:
 
 networks:
   server-net:
