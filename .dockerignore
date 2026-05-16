@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.gitignore
+.env*
+!.env.example
+README.md
+docs
+image_src
+public/gallery/*.jpg.bak
+*.log
+.DS_Store
+.vercel
+coverage

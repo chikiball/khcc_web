@@ -1,0 +1,16 @@
+{
+  "name": "KHCC — Knock House Chop Chop",
+  "short_name": "KHCC",
+  "description": "Fast-pace road cycling. Show up, ride, go home.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4ece0",
+  "theme_color": "#ec6e8a",
+  "orientation": "portrait",
+  "scope": "/",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

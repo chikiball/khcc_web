@@ -1,0 +1,41 @@
+# Used by `supabase init` / `supabase start` for local development.
+# Production lives in Supabase Cloud — only the `migrations/` directory
+# is meaningful for prod (push via `supabase db push`).
+
+project_id = "khcc-web"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://khcc.nandharu.uk"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = false  # Stage 1: Google only
+double_confirm_changes = true
+
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
