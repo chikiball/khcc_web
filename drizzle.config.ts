@@ -12,6 +12,10 @@ const dbCredentials = process.env.DATABASE_URL
       user: process.env.PGUSER ?? "khcc",
       password: process.env.PGPASSWORD ?? "khcc",
       database: process.env.PGDATABASE ?? "khcc",
+      // Self-hosted Postgres in Docker doesn't serve TLS. drizzle-kit
+      // defaults `ssl` to true when discrete fields are used, so set it
+      // explicitly here.
+      ssl: false,
     };
 
 export default defineConfig({
