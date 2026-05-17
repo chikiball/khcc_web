@@ -49,15 +49,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.confi
 COPY --from=builder --chown=nextjs:nodejs /app/src ./src
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
-# drizzle-kit + tsx must be available at runtime to execute migrations
-# and one-off scripts (seed, etc.). We copy the package directories only —
-# the `.bin/` symlinks get dereferenced incorrectly by Docker COPY, so we
-# always call these via their direct entry-point paths instead:
-#   node ./node_modules/drizzle-kit/bin.cjs migrate
-#   node ./node_modules/tsx/dist/cli.mjs scripts/<name>.ts
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/drizzle-kit ./node_modules/drizzle-kit
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/drizzle-orm ./node_modules/drizzle-orm
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/tsx ./node_modules/tsx
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+# Full node_modules so scripts can require any installed package (nodemailer,
+# pg, etc.) without a per-package COPY line. Adds ~200MB to the runner image
+# but the production app continues to use .next/standalone and is unaffected.
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
 
 COPY --chown=nextjs:nodejs docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
