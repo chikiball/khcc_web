@@ -22,9 +22,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             Rides
           </Link>
           {user.role === "admin" && (
-            <Link href="/admin/members" className="text-ink-soft hover:text-ink">
-              Members
-            </Link>
+            <>
+              <Link href="/admin/members" className="text-ink-soft hover:text-ink">
+                Members
+              </Link>
+              <Link href="/admin/content" className="text-ink-soft hover:text-ink">
+                Content
+              </Link>
+            </>
           )}
           <Link href="/rides" className="text-ink-soft hover:text-ink">
             ← Back

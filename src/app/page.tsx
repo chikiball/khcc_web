@@ -2,6 +2,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth-helpers";
+import { db, schema } from "@/db";
+import { inArray } from "drizzle-orm";
 
 const galleryPhotos = [
   { src: "/gallery/01-new-kit.jpg", alt: "KHCC new kit ride" },
@@ -12,12 +14,23 @@ const galleryPhotos = [
   { src: "/gallery/06-tour-de-batam.jpg", alt: "Tour de Batam 2024" },
 ];
 
+export const dynamic = "force-dynamic";
+
 export default async function LandingPage() {
   const user = await getCurrentUser();
   if (user) {
     if (!user.onboarded) redirect("/onboarding");
     redirect(user.status === "approved" ? "/rides" : "/pending");
   }
+
+  // Fetch admin-editable content blocks. Migration seeds default copy
+  // for "about" and "achievements" so the page renders from day one.
+  const blocks = await db
+    .select()
+    .from(schema.contentBlocks)
+    .where(inArray(schema.contentBlocks.key, ["about", "achievements"]));
+  const about = blocks.find((b) => b.key === "about");
+  const achievements = blocks.find((b) => b.key === "achievements");
 
   return (
     <main className="min-h-dvh bg-paper text-ink">
@@ -44,10 +57,16 @@ export default async function LandingPage() {
               I&apos;m in →
             </Link>
             <Link
-              href="#what"
-              className="inline-flex items-center justify-center rounded-2xl bg-transparent ring-1 ring-maroon-300 text-ink px-8 py-3 font-semibold hover:bg-cream-100"
+              href="#about"
+              className="inline-flex items-center justify-center rounded-2xl bg-transparent ring-1 ring-maroon-300 text-ink px-6 py-3 font-semibold hover:bg-cream-100"
             >
-              What is KHCC?
+              {about?.title ?? "What is KHCC?"}
+            </Link>
+            <Link
+              href="#achievements"
+              className="inline-flex items-center justify-center rounded-2xl bg-transparent ring-1 ring-maroon-300 text-ink px-6 py-3 font-semibold hover:bg-cream-100"
+            >
+              {achievements?.title ?? "Achievements"}
             </Link>
           </div>
         </div>
@@ -73,31 +92,29 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      <section id="what" className="max-w-2xl mx-auto px-6 py-16">
-        <h2 className="font-display text-3xl font-bold text-ink">What it is.</h2>
-        <div className="mt-6 space-y-4 text-ink-soft text-base leading-relaxed">
-          <p>
-            <strong className="text-ink">KHCC</strong> — Knock House Chop Chop —
-            is a road cycling club. We post rides, you tap In, we ride, we go
-            home. Chop chop.
-          </p>
-          <p>
-            Three pace groups so nobody gets dropped on the wrong day:{" "}
-            <span className="font-semibold text-ink">A</span> for the climbers,{" "}
-            <span className="font-semibold text-ink">B</span> for the steady
-            bunch, <span className="font-semibold text-ink">C</span> for the
-            no-drop friendly roll.
-          </p>
-          <p>
-            This app replaces the WhatsApp scroll: see the next ride, see who&apos;s
-            in, tap In yourself. That&apos;s the whole pitch.
-          </p>
-        </div>
-      </section>
+      {about && <ContentSection id="about" block={about} />}
+      {achievements && <ContentSection id="achievements" block={achievements} />}
 
       <footer className="border-t border-maroon-200/40 py-8 text-center text-xs text-ink-soft/70">
         Knock House Chop Chop · Cycling Club
       </footer>
     </main>
+  );
+}
+
+function ContentSection({
+  id,
+  block,
+}: {
+  id: string;
+  block: { title: string; body: string };
+}) {
+  return (
+    <section id={id} className="max-w-2xl mx-auto px-6 py-16">
+      <h2 className="font-display text-3xl font-bold text-ink">{block.title}</h2>
+      <div className="mt-6 text-ink-soft text-base leading-relaxed whitespace-pre-wrap">
+        {block.body}
+      </div>
+    </section>
   );
 }

@@ -157,3 +157,20 @@ export const rideRsvps = pgTable(
 export type User = typeof users.$inferSelect;
 export type Ride = typeof rides.$inferSelect;
 export type RideRsvp = typeof rideRsvps.$inferSelect;
+
+// ===========================================================================
+// Content blocks — admin-editable copy on the public landing page
+// ===========================================================================
+// Single key-value table. Each row is a section ("about", "achievements").
+// Body is plain text; rendered with whitespace-pre-wrap so blank lines
+// become paragraph breaks. Keep it simple — leaders don't need markdown.
+
+export const contentBlocks = pgTable("content_blocks", {
+  key: text("key").primaryKey(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+});
+
+export type ContentBlock = typeof contentBlocks.$inferSelect;
