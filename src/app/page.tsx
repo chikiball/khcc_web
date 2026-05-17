@@ -14,7 +14,10 @@ const galleryPhotos = [
 
 export default async function LandingPage() {
   const user = await getCurrentUser();
-  if (user) redirect(user.onboarded ? "/rides" : "/onboarding");
+  if (user) {
+    if (!user.onboarded) redirect("/onboarding");
+    redirect(user.status === "approved" ? "/rides" : "/pending");
+  }
 
   return (
     <main className="min-h-dvh bg-paper text-ink">

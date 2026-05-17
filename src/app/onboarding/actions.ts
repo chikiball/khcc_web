@@ -53,5 +53,5 @@ export async function completeOnboarding(formData: FormData) {
   });
 
   revalidatePath("/rides");
-  redirect("/rides");
+  redirect("/pending");
 }

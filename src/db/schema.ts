@@ -22,6 +22,7 @@ import type { AdapterAccountType } from "next-auth/adapters";
 // ===========================================================================
 
 export const roleEnum = pgEnum("role", ["member", "leader", "organiser", "admin"]);
+export const userStatusEnum = pgEnum("user_status", ["pending", "approved", "rejected"]);
 export const paceEnum = pgEnum("pace_group", ["A", "B", "C"]);
 export const rideStatusEnum = pgEnum("ride_status", [
   "scheduled",
@@ -41,6 +42,10 @@ export const users = pgTable("users", {
 
   // KHCC profile fields
   role: roleEnum("role").notNull().default("member"),
+  status: userStatusEnum("status").notNull().default("pending"),
+  approvedAt: timestamp("approved_at", { mode: "date" }),
+  approvedBy: text("approved_by"),
+  rejectedReason: text("rejected_reason"),
   paceGroup: paceEnum("pace_group").notNull().default("B"),
   bike: text("bike"),
   stravaHandle: text("strava_handle"),

@@ -30,7 +30,11 @@ export default {
     authorized({ auth, request }) {
       const isSignedIn = !!auth?.user;
       const { pathname } = request.nextUrl;
-      const protectedPath = pathname.startsWith("/rides") || pathname.startsWith("/onboarding");
+      const protectedPath =
+        pathname.startsWith("/rides") ||
+        pathname.startsWith("/onboarding") ||
+        pathname.startsWith("/admin") ||
+        pathname.startsWith("/pending");
 
       if (protectedPath && !isSignedIn) return false; // redirect to /login
       // Signed-in users hitting /login are bounced by the page itself.

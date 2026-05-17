@@ -6,12 +6,14 @@ import { eq } from "drizzle-orm";
 import authConfig from "@/auth.config";
 
 type Role = "member" | "leader" | "organiser" | "admin";
+type Status = "pending" | "approved" | "rejected";
 
 declare module "next-auth" {
   interface Session {
     user: {
       id: string;
       role: Role;
+      status: Status;
       onboarded: boolean;
     } & DefaultSession["user"];
   }
@@ -21,6 +23,7 @@ declare module "next-auth" {
 type AppToken = {
   id?: string;
   role?: Role;
+  status?: Status;
   onboarded?: boolean;
 };
 
@@ -37,21 +40,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user, trigger }) {
       const t = token as typeof token & AppToken;
       if (user?.id) t.id = user.id;
-      // Also refresh while !t.onboarded — otherwise the JWT stays stale
-      // after the onboarding action writes to DB and we get a /rides ↔
-      // /onboarding redirect loop. Once onboarded is true the token
-      // caches it and this branch is skipped.
+      // Refresh while !approved or !onboarded — both transient states that
+      // change without a re-login. Once approved AND onboarded, the token
+      // caches and we skip the DB query on every subsequent request.
       if (
         t.id &&
-        (trigger === "signIn" || trigger === "update" || !t.role || !t.onboarded)
+        (trigger === "signIn" ||
+          trigger === "update" ||
+          !t.role ||
+          !t.onboarded ||
+          t.status !== "approved")
       ) {
         const [row] = await db
-          .select({ role: users.role, onboardedAt: users.onboardedAt })
+          .select({
+            role: users.role,
+            status: users.status,
+            onboardedAt: users.onboardedAt,
+          })
           .from(users)
           .where(eq(users.id, t.id))
           .limit(1);
         if (row) {
           t.role = row.role;
+          t.status = row.status;
           t.onboarded = row.onboardedAt !== null;
         }
       }
@@ -61,6 +72,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const t = token as typeof token & AppToken;
       if (t.id) session.user.id = t.id;
       if (t.role) session.user.role = t.role;
+      session.user.status = t.status ?? "pending";
       session.user.onboarded = t.onboarded ?? false;
       return session;
     },

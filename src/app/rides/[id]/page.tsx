@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
-import { canManageRides, requireUser } from "@/lib/auth-helpers";
+import { canManageRides, requireApproved } from "@/lib/auth-helpers";
 import { RsvpButton } from "@/components/rsvp-button";
 import { PaceBadge } from "@/components/ride-card";
 import { and, eq } from "drizzle-orm";
@@ -12,8 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function RideDetailPage({ params }: { params: Params }) {
   const { id } = await params;
-  const user = await requireUser();
-  if (!user.onboarded) redirect("/onboarding");
+  const user = await requireApproved();
 
   const [ride] = await db
     .select()

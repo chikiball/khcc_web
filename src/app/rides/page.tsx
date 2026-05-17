@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
-import { canManageRides, requireUser } from "@/lib/auth-helpers";
+import { canManageRides, requireApproved } from "@/lib/auth-helpers";
 import { RideCard } from "@/components/ride-card";
 import { signOut } from "@/app/auth/actions";
 import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
@@ -10,8 +9,7 @@ export const metadata = { title: "Rides" };
 export const dynamic = "force-dynamic";
 
 export default async function RidesPage() {
-  const user = await requireUser();
-  if (!user.onboarded) redirect("/onboarding");
+  const user = await requireApproved();
 
   const now = new Date();
   const horizon = new Date(now);
