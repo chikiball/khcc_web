@@ -55,6 +55,11 @@ services:
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - SMTP_FROM=${SMTP_FROM}
+      # Server Action encryption key — keeps action IDs stable across
+      # deploys so open browser tabs do not get "Failed to find Server
+      # Action" errors after a deploy. If unset, Next.js generates a
+      # fresh key per build, breaking any in-flight client tabs.
+      - NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY}
       # Public (server-side reads only — Next.js bakes NEXT_PUBLIC_* into the
       # client bundle at build time via build args above)
       - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-https://khcc.nandharu.uk}
