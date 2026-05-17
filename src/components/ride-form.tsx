@@ -1,4 +1,5 @@
 import { colorClasses, type RideTypeOption } from "@/lib/ride-types";
+import { LocationFields } from "@/components/location-fields";
 
 type Ride = {
   title?: string | null;
@@ -68,22 +69,11 @@ export function RideForm({
         readOnly={readOnly}
       />
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field
-          label="Latitude"
-          name="start_point_lat"
-          defaultValue={v.start_point_lat ?? ""}
-          placeholder="1.2806"
-          readOnly={readOnly}
-        />
-        <Field
-          label="Longitude"
-          name="start_point_lng"
-          defaultValue={v.start_point_lng ?? ""}
-          placeholder="103.8714"
-          readOnly={readOnly}
-        />
-      </div>
+      <LocationFields
+        initialLat={v.start_point_lat ?? null}
+        initialLng={v.start_point_lng ?? null}
+        readOnly={readOnly}
+      />
 
       <fieldset disabled={readOnly}>
         <legend className="text-sm font-medium text-ink">Pace group</legend>

@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import { canManageRides, requireApproved } from "@/lib/auth-helpers";
 import { RsvpButton } from "@/components/rsvp-button";
 import { PaceBadge } from "@/components/ride-card";
+import { RideDetailMap } from "@/components/ride-detail-map";
 import { and, eq } from "drizzle-orm";
 
 type Params = Promise<{ id: string }>;
@@ -160,6 +161,15 @@ export default async function RideDetailPage({ params }: { params: Params }) {
           >
             Route ↗
           </a>
+        )}
+
+        {ride.startPointLat && ride.startPointLng && (
+          <div className="mt-6">
+            <RideDetailMap
+              lat={Number(ride.startPointLat)}
+              lng={Number(ride.startPointLng)}
+            />
+          </div>
         )}
 
         <section className="mt-8">
