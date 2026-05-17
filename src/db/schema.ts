@@ -174,3 +174,21 @@ export const contentBlocks = pgTable("content_blocks", {
 });
 
 export type ContentBlock = typeof contentBlocks.$inferSelect;
+
+// ===========================================================================
+// Gallery photos — admin-managed showcase strip on the landing page
+// ===========================================================================
+// Each row points at an image URL — either a static file under /gallery/*
+// (the seeded ones) or an admin-uploaded file under /uploads/gallery/*.
+// Order is created_at DESC so admin-uploaded photos surface above the seeded
+// defaults; seed timestamps are spaced out so the seeded order is stable.
+
+export const galleryPhotos = pgTable("gallery_photos", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  imageUrl: text("image_url").notNull(),
+  alt: text("alt").notNull().default(""),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  uploadedBy: text("uploaded_by").references(() => users.id, { onDelete: "set null" }),
+});
+
+export type GalleryPhoto = typeof galleryPhotos.$inferSelect;

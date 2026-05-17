@@ -29,6 +29,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               <Link href="/admin/content" className="text-ink-soft hover:text-ink">
                 Content
               </Link>
+              <Link href="/admin/gallery" className="text-ink-soft hover:text-ink">
+                Gallery
+              </Link>
             </>
           )}
           <Link href="/rides" className="text-ink-soft hover:text-ink">

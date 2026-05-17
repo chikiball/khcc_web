@@ -3,16 +3,7 @@ import Image from "next/image";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth-helpers";
 import { db, schema } from "@/db";
-import { inArray } from "drizzle-orm";
-
-const galleryPhotos = [
-  { src: "/gallery/01-new-kit.jpg", alt: "KHCC new kit ride" },
-  { src: "/gallery/02-comme-femmes.jpg", alt: "Comme Femmes Thursday ride" },
-  { src: "/gallery/03-bunch.jpg", alt: "Bunch on the bridge at dawn" },
-  { src: "/gallery/04-skinsuit.jpg", alt: "KHCC kit portrait" },
-  { src: "/gallery/05-tri-factor.jpg", alt: "Tri-Factor celebratory ride" },
-  { src: "/gallery/06-tour-de-batam.jpg", alt: "Tour de Batam 2024" },
-];
+import { desc, inArray } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +14,17 @@ export default async function LandingPage() {
     redirect(user.status === "approved" ? "/rides" : "/pending");
   }
 
-  // Fetch admin-editable content blocks. Migration seeds default copy
-  // for "about" and "achievements" so the page renders from day one.
-  const blocks = await db
-    .select()
-    .from(schema.contentBlocks)
-    .where(inArray(schema.contentBlocks.key, ["about", "achievements"]));
+  // Fetch admin-editable content blocks + gallery photos in parallel.
+  const [blocks, photos] = await Promise.all([
+    db
+      .select()
+      .from(schema.contentBlocks)
+      .where(inArray(schema.contentBlocks.key, ["about", "achievements"])),
+    db
+      .select()
+      .from(schema.galleryPhotos)
+      .orderBy(desc(schema.galleryPhotos.createdAt)),
+  ]);
   const about = blocks.find((b) => b.key === "about");
   const achievements = blocks.find((b) => b.key === "achievements");
 
@@ -74,18 +70,19 @@ export default async function LandingPage() {
 
       <section className="overflow-x-auto">
         <div className="flex gap-3 px-6 pb-8 snap-x snap-mandatory">
-          {galleryPhotos.map((photo, i) => (
+          {photos.map((photo, i) => (
             <div
-              key={photo.src}
+              key={photo.id}
               className="relative shrink-0 w-[78vw] sm:w-72 aspect-square rounded-2xl overflow-hidden snap-start ring-1 ring-maroon-200"
             >
               <Image
-                src={photo.src}
+                src={photo.imageUrl}
                 alt={photo.alt}
                 fill
                 sizes="(max-width: 640px) 78vw, 288px"
                 className="object-cover"
                 priority={i === 0}
+                unoptimized={photo.imageUrl.startsWith("/uploads/")}
               />
             </div>
           ))}
