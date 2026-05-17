@@ -112,7 +112,12 @@ export default async function AdminMembersPage({
               {tab === "pending" && (
                 <div className="flex gap-2 shrink-0 self-center">
                   <ApproveButton userId={m.id} />
-                  <RejectButton userId={m.id} userName={m.name ?? "this rider"} />
+                  <RejectButton userId={m.id} userName={m.name ?? "this rider"} variant="reject" />
+                </div>
+              )}
+              {tab === "approved" && (
+                <div className="flex gap-2 shrink-0 self-center">
+                  <RejectButton userId={m.id} userName={m.name ?? "this rider"} variant="remove" />
                 </div>
               )}
             </div>

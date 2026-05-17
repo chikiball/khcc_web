@@ -25,7 +25,6 @@ export async function approveUser(userId: string) {
     .returning({ email: schema.users.email, name: schema.users.name });
 
   if (target?.email) {
-    // Fire-and-forget — don't block the action on email delivery.
     sendEmail({
       to: target.email,
       subject: "You're in — KHCC",
@@ -43,10 +42,23 @@ export async function approveUser(userId: string) {
   revalidatePath("/admin/members");
 }
 
+/**
+ * Reject a pending applicant OR remove an approved member.
+ * Same DB transition (status='rejected'); email copy branches on
+ * the user's previous state so language matches the situation.
+ */
 export async function rejectUser(userId: string, formData: FormData) {
   await requireAdmin();
   const reason = String(formData.get("reason") ?? "").trim();
-  if (!reason) throw new Error("A reason is required when rejecting.");
+  if (!reason) throw new Error("A reason is required.");
+
+  // Read previous status BEFORE the update so we can pick the right email copy.
+  const [previous] = await db
+    .select({ status: schema.users.status })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+  const wasApproved = previous?.status === "approved";
 
   const [target] = await db
     .update(schema.users)
@@ -61,13 +73,21 @@ export async function rejectUser(userId: string, formData: FormData) {
     .returning({ email: schema.users.email, name: schema.users.name });
 
   if (target?.email) {
+    const subject = wasApproved ? "Your KHCC access" : "About your KHCC application";
+    const headline = wasApproved
+      ? "Your KHCC access has been removed"
+      : "About your KHCC application";
+    const lead = wasApproved
+      ? "Your KHCC access has been removed by an admin."
+      : "Thanks for your interest. We weren&rsquo;t able to approve your application at this time.";
+
     sendEmail({
       to: target.email,
-      subject: "KHCC application",
+      subject,
       html: emailTemplate({
-        title: "About your KHCC application",
+        title: headline,
         body: `<p>Hi ${target.name?.split(" ")[0] ?? "there"},</p>
-               <p>Thanks for your interest. We weren&rsquo;t able to approve your application at this time.</p>
+               <p>${lead}</p>
                <p><strong>Reason:</strong><br>${reason.replace(/\n/g, "<br>")}</p>
                <p>If you think this was a mistake, reply to this email.</p>`,
       }),

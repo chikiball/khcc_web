@@ -58,8 +58,12 @@ export function EmailSignIn() {
         disabled={pending || !email.trim()}
         className="w-full inline-flex items-center justify-center rounded-2xl bg-maroon-700 hover:bg-maroon-800 text-cream-50 px-6 py-3 font-medium disabled:opacity-50 active:scale-[0.98] transition-transform"
       >
-        {pending ? "Sending…" : "Email me a sign-in link"}
+        {pending ? "Sending…" : "Sign in or sign up with email"}
       </button>
+      <p className="text-xs text-ink-soft/70 text-center pt-1">
+        We&apos;ll email you a one-time link. New here? You&apos;ll set up your
+        profile after you click.
+      </p>
     </form>
   );
 }
