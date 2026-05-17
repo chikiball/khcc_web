@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/auth-helpers";
 import { signOut } from "@/app/auth/actions";
-import { ReapplyButton } from "@/components/reapply-button";
 import { eq } from "drizzle-orm";
 
 export const metadata = { title: "Awaiting approval" };
@@ -65,13 +64,9 @@ export default async function PendingPage() {
               </div>
             )}
             <p className="mt-4 text-sm text-ink-soft">
-              If you think this was a mistake, reply to the email we sent —
-              or request another review below.
+              If you think this was a mistake, sign out and sign in again with
+              your email — an admin will take another look.
             </p>
-
-            <div className="mt-6">
-              <ReapplyButton />
-            </div>
           </>
         )}
 

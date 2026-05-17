@@ -1,32 +1,19 @@
 import type { NextAuthConfig } from "next-auth";
-import Google from "next-auth/providers/google";
 
 /**
- * Edge-safe Auth.js config — used by middleware and re-used as the base
- * for the full config in `auth.ts`. Must NOT import anything that pulls
- * in Node-only modules (no DB adapter, no `pg`, no `crypto` direct use).
+ * Edge-safe Auth.js config — used by middleware. Must NOT import anything
+ * that pulls in Node-only modules (no DB adapter, no `pg`).
  *
- * The full Auth.js setup with the Drizzle adapter and DB-touching
- * callbacks lives in `auth.ts` and runs on the Node runtime via the
- * `/api/auth/[...nextauth]` route handler.
- *
- * Reference: https://authjs.dev/guides/edge-compatibility
+ * Providers list is empty here (kept in auth.ts only) because middleware
+ * does not need to know about providers — it only checks the JWT and runs
+ * the `authorized` callback.
  */
 export default {
-  providers: [
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
-    }),
-  ],
+  providers: [],
   pages: {
     signIn: "/login",
   },
   callbacks: {
-    // The `authorized` callback is the edge-safe way to gate routes.
-    // It runs in middleware. Returning true allows; returning false (or
-    // a Response) denies / redirects. The onboarded redirect is handled
-    // by Server Components that have access to the full session.
     authorized({ auth, request }) {
       const isSignedIn = !!auth?.user;
       const { pathname } = request.nextUrl;
@@ -36,8 +23,7 @@ export default {
         pathname.startsWith("/admin") ||
         pathname.startsWith("/pending");
 
-      if (protectedPath && !isSignedIn) return false; // redirect to /login
-      // Signed-in users hitting /login are bounced by the page itself.
+      if (protectedPath && !isSignedIn) return false;
       return true;
     },
   },
