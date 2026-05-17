@@ -104,7 +104,7 @@ export function AvatarPicker({
   return (
     <div className="flex items-start gap-4">
       <label className="cursor-pointer shrink-0">
-        <span className="block size-20 hex-clip overflow-hidden bg-coral-200">
+        <span className="block size-20 rounded-full overflow-hidden bg-coral-200 ring-2 ring-coral-300">
           {previewUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={previewUrl} alt="" className="size-full object-cover" />
