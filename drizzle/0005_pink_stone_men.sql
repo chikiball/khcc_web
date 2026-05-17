@@ -24,6 +24,12 @@ ON CONFLICT ("code") DO NOTHING;
 ALTER TABLE "rides" ALTER COLUMN "pace_group" SET DATA TYPE text;--> statement-breakpoint
 ALTER TABLE "users" ALTER COLUMN "pace_group" SET DATA TYPE text;--> statement-breakpoint
 
+-- Step 3b: SET DATA TYPE leaves the column DEFAULT clause typed as the
+-- old enum ('B'::pace_group). DROP TYPE below would then fail with
+-- "cannot drop type pace_group because other objects depend on it".
+-- Re-issue the default as a plain text literal so the dependency is gone.
+ALTER TABLE "users" ALTER COLUMN "pace_group" SET DEFAULT 'B';--> statement-breakpoint
+
 -- Step 4: now that ride_types is populated, the FKs can be added.
 DO $$ BEGIN
  ALTER TABLE "rides" ADD CONSTRAINT "rides_pace_group_ride_types_code_fk" FOREIGN KEY ("pace_group") REFERENCES "public"."ride_types"("code") ON DELETE no action ON UPDATE no action;
