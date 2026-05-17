@@ -37,7 +37,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user, trigger }) {
       const t = token as typeof token & AppToken;
       if (user?.id) t.id = user.id;
-      if (t.id && (trigger === "signIn" || trigger === "update" || !t.role)) {
+      // Also refresh while !t.onboarded — otherwise the JWT stays stale
+      // after the onboarding action writes to DB and we get a /rides ↔
+      // /onboarding redirect loop. Once onboarded is true the token
+      // caches it and this branch is skipped.
+      if (
+        t.id &&
+        (trigger === "signIn" || trigger === "update" || !t.role || !t.onboarded)
+      ) {
         const [row] = await db
           .select({ role: users.role, onboardedAt: users.onboardedAt })
           .from(users)
