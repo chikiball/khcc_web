@@ -12,6 +12,10 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
+# Ensure the user-uploads bind-mount target exists on the host so docker
+# doesn't create it root-owned.
+mkdir -p uploads/avatars
+
 echo "--- git pull ---"
 git pull origin main
 

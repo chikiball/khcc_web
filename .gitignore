@@ -50,3 +50,6 @@ yarn-error.log*
 # Supabase local
 /supabase/.branches
 /supabase/.temp
+
+# User uploads — host-side bind-mount, runtime data only
+/uploads
