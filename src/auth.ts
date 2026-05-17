@@ -1,7 +1,9 @@
 import NextAuth, { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
+import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/db";
-import { users } from "@/db/schema";
+import { users, accounts, verificationTokens } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import authConfig from "@/auth.config";
 
@@ -26,18 +28,25 @@ type AppToken = {
   onboarded?: boolean;
 };
 
-// Email-only credentials. We do NOT verify the email (no OTP, no link) —
-// admin approval is the entire gatekeeper. Trust model: a small club where
-// admin recognises members out-of-band; anyone claiming an email they don't
-// own gets rejected at admin review.
+// Two providers, identical admin-approval flow:
+//   - Credentials: user types email → no verification → admin reviews
+//   - Google OAuth: user signs in with Google → email is verified → admin reviews
+// In both cases:
+//   - Unknown email → user row created (status=pending) → /pending
+//   - Known approved → /rides
+//   - Known rejected → AUTO-FLIP to pending in signIn callback → /pending
 //
-// Behaviour:
-//  - Unknown email → create user (status=pending)
-//  - Known pending/approved → sign in as that user
-//  - Known rejected → AUTO-FLIP to pending (user "re-sign-up" =
-//    re-application per user spec) and sign in
+// allowDangerousEmailAccountLinking on Google is safe because email is the
+// shared identity column and we trust admin to gate; it lets a user who first
+// signed up via Credentials later log in with Google for the same email and
+// land on the same users row.
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  adapter: DrizzleAdapter(db, {
+    usersTable: users,
+    accountsTable: accounts,
+    verificationTokensTable: verificationTokens,
+  }),
   providers: [
     Credentials({
       credentials: {
@@ -56,19 +65,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           .limit(1);
 
         if (existing) {
-          if (existing.status === "rejected") {
-            // Re-application: clear rejection, back to pending
-            await db
-              .update(users)
-              .set({
-                status: "pending",
-                rejectedReason: null,
-                approvedAt: null,
-                approvedBy: null,
-                updatedAt: new Date(),
-              })
-              .where(eq(users.id, existing.id));
-          }
           return {
             id: existing.id,
             email: existing.email,
@@ -90,10 +86,41 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         };
       },
     }),
+    Google({
+      clientId: process.env.AUTH_GOOGLE_ID,
+      clientSecret: process.env.AUTH_GOOGLE_SECRET,
+      allowDangerousEmailAccountLinking: true,
+    }),
   ],
   session: { strategy: "jwt" },
   callbacks: {
     ...authConfig.callbacks,
+    async signIn({ user }) {
+      // Auto-flip rejected → pending on any sign-in. Mirrors the user spec:
+      // "user re-sign-up = back to pending". Runs after Credentials
+      // authorize() returns a user, and after OAuth adapter creates/links
+      // the user row. Never blocks the sign-in — always returns true.
+      if (user?.id) {
+        const [row] = await db
+          .select({ status: users.status })
+          .from(users)
+          .where(eq(users.id, user.id))
+          .limit(1);
+        if (row?.status === "rejected") {
+          await db
+            .update(users)
+            .set({
+              status: "pending",
+              rejectedReason: null,
+              approvedAt: null,
+              approvedBy: null,
+              updatedAt: new Date(),
+            })
+            .where(eq(users.id, user.id));
+        }
+      }
+      return true;
+    },
     async jwt({ token, user, trigger }) {
       const t = token as typeof token & AppToken;
       if (user?.id) t.id = user.id;

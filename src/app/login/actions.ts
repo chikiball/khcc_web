@@ -7,8 +7,12 @@ export async function signInWithEmail(formData: FormData) {
   if (!email || !email.includes("@")) {
     throw new Error("Enter a valid email address.");
   }
-  // signIn() throws a NEXT_REDIRECT internally on success — this never
-  // returns normally on a successful sign-in. On a credentials reject
-  // (returned null from authorize), Auth.js redirects to /login?error=...
   await signIn("credentials", { email, redirectTo: "/" });
+}
+
+export async function signInWithGoogle() {
+  // OAuth path — server action initiates the redirect to Google;
+  // the callback handler at /api/auth/callback/google completes sign-in
+  // and the JWT cookie is set, then we land at "/" which routes by status.
+  await signIn("google", { redirectTo: "/" });
 }
