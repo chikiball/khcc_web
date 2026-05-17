@@ -12,13 +12,17 @@ RUN npm ci
 
 # ---------- Builder ----------
 FROM base AS builder
-# Only NEXT_PUBLIC_* values are inlined into client bundles; pass them as ARG.
-# Server-only secrets (AUTH_SECRET, AUTH_GOOGLE_SECRET, DATABASE_URL,
-# POSTGRES_PASSWORD) come in at runtime — never via build args.
+# NEXT_PUBLIC_* values are inlined into client bundles; pass them as ARG.
+# NEXT_SERVER_ACTIONS_ENCRYPTION_KEY is read at build time when Next.js
+# encrypts server-action IDs — must be present here, not just at runtime.
+# Server-only secrets (AUTH_SECRET, AUTH_GOOGLE_SECRET, PGPASSWORD) come
+# in at runtime — never via build args.
 ARG NEXT_PUBLIC_SITE_URL
 ARG AUTH_GOOGLE_ID
+ARG NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
 ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
 ENV NEXT_PUBLIC_GOOGLE_ID=${AUTH_GOOGLE_ID}
+ENV NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY}
 ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=deps /app/node_modules ./node_modules

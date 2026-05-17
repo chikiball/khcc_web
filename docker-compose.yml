@@ -28,6 +28,11 @@ services:
       args:
         AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID}
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://khcc.nandharu.uk}
+        # Server-action encryption key MUST be set at build time — Next.js
+        # encrypts action IDs into the JS bundle when building. If absent
+        # here, every build generates a fresh key and existing browser tabs
+        # break with "Failed to find Server Action" after deploy.
+        NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY}
     container_name: khcc-web
     restart: unless-stopped
     environment:
