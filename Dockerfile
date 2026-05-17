@@ -43,8 +43,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # Drizzle migration assets — needed by `drizzle-kit migrate` at startup.
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.config.ts
-COPY --from=builder --chown=nextjs:nodejs /app/src/db ./src/db
-# One-off scripts (seed, etc.) runnable via `docker exec khcc-web npx tsx scripts/<name>.ts`
+# Source needed by one-off scripts (seed, send-test-email, etc). The
+# production app itself uses /.next/standalone — these files are for
+# `tsx scripts/...` invocations.
+COPY --from=builder --chown=nextjs:nodejs /app/src ./src
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
 # drizzle-kit + tsx must be available at runtime to execute migrations
