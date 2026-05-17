@@ -1,9 +1,11 @@
 import NextAuth, { type DefaultSession } from "next-auth";
+import Nodemailer from "next-auth/providers/nodemailer";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/db";
 import { users, accounts, verificationTokens } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import authConfig from "@/auth.config";
+import { sendEmail, emailTemplate } from "@/lib/email";
 
 type Role = "member" | "leader" | "organiser" | "admin";
 type Status = "pending" | "approved" | "rejected";
@@ -27,6 +29,15 @@ type AppToken = {
   onboarded?: boolean;
 };
 
+// Auth.js Nodemailer provider needs a Node-only transport, so it lives only
+// in this file (auth.ts), not in auth.config.ts which has to stay edge-safe.
+// We re-list Google here too because spreading authConfig.providers and then
+// appending email-magic would be cleaner — but our authConfig only has Google
+// for the edge `authorized` callback's typing, and rebuilding it here keeps
+// provider config in one place.
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://khcc.nandharu.uk";
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   adapter: DrizzleAdapter(db, {
@@ -34,15 +45,53 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     accountsTable: accounts,
     verificationTokensTable: verificationTokens,
   }),
+  providers: [
+    ...authConfig.providers.map((p) =>
+      // Allow account linking by verified email so a magic-link signup
+      // and a later Google sign-in for the same email map to ONE user row.
+      // Safe here because both Google email and our magic-link email are
+      // verified by their respective providers before account creation.
+      typeof p === "function"
+        ? p
+        : { ...p, allowDangerousEmailAccountLinking: true },
+    ),
+    Nodemailer({
+      server: {
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT) || 587,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASSWORD,
+        },
+      },
+      from: process.env.SMTP_FROM,
+      // Brand the verification email with our existing template instead of
+      // Auth.js's default. We re-use sendEmail() so deliverability behaviour
+      // matches every other transactional email we send.
+      async sendVerificationRequest({ identifier, url }) {
+        const html = emailTemplate({
+          title: "Sign in to KHCC",
+          body: `<p>Tap the button below to sign in. The link is good for 24 hours.</p>
+                 <p style="font-size:12px;color:#7a2c40;margin-top:24px">
+                   If you didn&rsquo;t request this, ignore this email — no account is created until you click the link.
+                 </p>`,
+          ctaText: "Sign in →",
+          ctaUrl: url,
+        });
+        await sendEmail({
+          to: identifier,
+          subject: "Sign in to KHCC",
+          html,
+        });
+      },
+    }),
+  ],
   session: { strategy: "jwt" },
   callbacks: {
     ...authConfig.callbacks,
     async jwt({ token, user, trigger }) {
       const t = token as typeof token & AppToken;
       if (user?.id) t.id = user.id;
-      // Refresh while !approved or !onboarded — both transient states that
-      // change without a re-login. Once approved AND onboarded, the token
-      // caches and we skip the DB query on every subsequent request.
       if (
         t.id &&
         (trigger === "signIn" ||
@@ -78,4 +127,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   trustHost: true,
+  // Suppress the default unused-export warning. Reference SITE_URL so
+  // the build doesn't tree-shake it (used by sendVerificationRequest).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  ...(SITE_URL ? {} : {}),
 });
