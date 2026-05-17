@@ -27,6 +27,19 @@ export async function requireAdmin() {
 }
 
 /**
+ * Require leader / organiser / admin (anyone who can manage rides).
+ * Returns 404 to non-managers (don't reveal admin URLs).
+ */
+export async function requireRideManager() {
+  const user = await requireUser();
+  if (!canManageRides(user.role)) {
+    const { notFound } = await import("next/navigation");
+    notFound();
+  }
+  return user;
+}
+
+/**
  * Roles that can create / edit / cancel rides.
  */
 export function canManageRides(role: string) {

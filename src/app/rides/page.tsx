@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { canManageRides, requireUser } from "@/lib/auth-helpers";
 import { RideCard } from "@/components/ride-card";
 import { signOut } from "@/app/auth/actions";
 import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
@@ -69,11 +69,21 @@ export default async function RidesPage() {
         <Link href="/rides" className="font-display text-2xl font-bold tracking-tight">
           KHCC
         </Link>
-        <form action={signOut}>
-          <button className="text-sm text-ink-soft hover:text-ink underline-offset-4 hover:underline">
-            Sign out
-          </button>
-        </form>
+        <div className="flex items-center gap-4">
+          {canManageRides(user.role) && (
+            <Link
+              href="/admin/rides"
+              className="text-sm font-medium text-coral-700 hover:text-coral-800 underline-offset-4 hover:underline"
+            >
+              Manage rides
+            </Link>
+          )}
+          <form action={signOut}>
+            <button className="text-sm text-ink-soft hover:text-ink underline-offset-4 hover:underline">
+              Sign out
+            </button>
+          </form>
+        </div>
       </header>
 
       <div className="px-5">
