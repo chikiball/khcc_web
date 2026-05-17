@@ -41,7 +41,14 @@ export function RideCard({
               {ride.start_point_name}
             </p>
           </div>
-          <PaceBadge code={ride.pace_group} rideType={rideType} />
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <PaceBadge code={ride.pace_group} rideType={rideType} />
+            {rideType && (
+              <span className="text-[10px] uppercase tracking-wider text-ink-soft text-right max-w-[8rem] truncate">
+                {rideType.name}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="mt-4 flex items-center gap-4 text-sm text-ink-soft">

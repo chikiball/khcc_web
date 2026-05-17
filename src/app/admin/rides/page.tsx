@@ -81,7 +81,9 @@ export default async function AdminRidesPage({
                   </p>
                   {ride.status !== "scheduled" && <StatusPill status={ride.status} />}
                 </div>
-                <p className="text-xs text-ink-soft mt-0.5">
+                <p className="text-xs text-ink-soft mt-0.5 truncate">
+                  {t ? <span className="text-ink">{t.name}</span> : ride.paceGroup}
+                  {" · "}
                   {new Date(ride.startsAt).toLocaleString(undefined, {
                     weekday: "short",
                     day: "numeric",

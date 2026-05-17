@@ -122,8 +122,22 @@ export default async function RideDetailPage({ params }: { params: Params }) {
             </h1>
             <p className="text-base text-ink-soft mt-2">{ride.startPointName}</p>
           </div>
-          <PaceBadge code={ride.paceGroup} rideType={rideType} />
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <PaceBadge code={ride.paceGroup} rideType={rideType} />
+            {rideType && (
+              <span className="text-[10px] uppercase tracking-wider text-ink-soft text-right max-w-[8rem] truncate">
+                {rideType.name}
+              </span>
+            )}
+          </div>
         </div>
+
+        {rideType?.description && (
+          <p className="mt-3 text-sm text-ink-soft italic">
+            <span className="font-medium text-ink not-italic">{rideType.name}:</span>{" "}
+            {rideType.description}
+          </p>
+        )}
 
         <dl className="mt-6 grid grid-cols-3 gap-2 text-center">
           <Stat label="km" value={distance} />
