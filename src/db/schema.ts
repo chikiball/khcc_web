@@ -23,7 +23,6 @@ import type { AdapterAccountType } from "next-auth/adapters";
 
 export const roleEnum = pgEnum("role", ["member", "leader", "organiser", "admin"]);
 export const userStatusEnum = pgEnum("user_status", ["pending", "approved", "rejected"]);
-export const paceEnum = pgEnum("pace_group", ["A", "B", "C"]);
 export const rideStatusEnum = pgEnum("ride_status", [
   "scheduled",
   "weather-watch",
@@ -31,6 +30,26 @@ export const rideStatusEnum = pgEnum("ride_status", [
   "completed",
 ]);
 export const rsvpStatusEnum = pgEnum("rsvp_status", ["in", "waitlist", "cancelled"]);
+
+// ===========================================================================
+// Ride types — admin-managed pace groups
+// ===========================================================================
+// Replaces the old hardcoded ('A','B','C') enum. Code is the FK target on
+// rides.pace_group and users.pace_group. Adding a new pace group is now an
+// INSERT, not a migration. The `color` field references one of the preset
+// keys in src/lib/ride-types.ts.
+
+export const rideTypes = pgTable("ride_types", {
+  code: text("code").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  color: text("color").notNull().default("coral"),
+  position: integer("position").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+export type RideType = typeof rideTypes.$inferSelect;
 
 export const users = pgTable("users", {
   // Auth.js fields
@@ -46,7 +65,10 @@ export const users = pgTable("users", {
   approvedAt: timestamp("approved_at", { mode: "date" }),
   approvedBy: text("approved_by"),
   rejectedReason: text("rejected_reason"),
-  paceGroup: paceEnum("pace_group").notNull().default("B"),
+  paceGroup: text("pace_group")
+    .notNull()
+    .default("B")
+    .references(() => rideTypes.code, { onDelete: "no action" }),
   bike: text("bike"),
   stravaHandle: text("strava_handle"),
   bio: text("bio"),
@@ -116,7 +138,9 @@ export const rides = pgTable(
     startPointLng: numeric("start_point_lng", { precision: 10, scale: 6 }),
     distanceKm: numeric("distance_km", { precision: 6, scale: 2 }),
     elevationM: integer("elevation_m"),
-    paceGroup: paceEnum("pace_group").notNull(),
+    paceGroup: text("pace_group")
+      .notNull()
+      .references(() => rideTypes.code, { onDelete: "no action" }),
     routeUrl: text("route_url"),
     description: text("description"),
     leaderId: text("leader_id").references(() => users.id, { onDelete: "set null" }),

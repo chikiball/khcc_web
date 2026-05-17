@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { db, schema } from "@/db";
 import { requireApproved } from "@/lib/auth-helpers";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { AvatarPicker } from "@/components/avatar-picker";
+import { colorClasses } from "@/lib/ride-types";
 import { signOut } from "@/app/auth/actions";
 import { updateProfile } from "./actions";
 
@@ -44,6 +45,25 @@ export default async function ProfilePage({
     .from(schema.usersPrivate)
     .where(eq(schema.usersPrivate.userId, user.id))
     .limit(1);
+
+  const rideTypes = await db
+    .select()
+    .from(schema.rideTypes)
+    .where(eq(schema.rideTypes.active, true))
+    .orderBy(asc(schema.rideTypes.position));
+  // Include the user's current type even if it has been deactivated, so
+  // they can see what they are still labelled as until they pick a new one.
+  if (
+    profile?.paceGroup &&
+    !rideTypes.some((t) => t.code === profile.paceGroup)
+  ) {
+    const [retired] = await db
+      .select()
+      .from(schema.rideTypes)
+      .where(eq(schema.rideTypes.code, profile.paceGroup))
+      .limit(1);
+    if (retired) rideTypes.push(retired);
+  }
 
   const initial = (profile?.name ?? user.email ?? "?")[0]?.toUpperCase() ?? "?";
 
@@ -94,24 +114,29 @@ export default async function ProfilePage({
           <fieldset>
             <legend className="text-sm font-medium text-ink">Pace group</legend>
             <p className="text-xs text-ink-soft mt-0.5 mb-2">
-              A — climbers · B — steady bunch · C — no-drop
+              {rideTypes.map((t) => `${t.code} — ${t.name}`).join(" · ")}
             </p>
             <div className="grid grid-cols-3 gap-2">
-              {(["A", "B", "C"] as const).map((p) => (
-                <label
-                  key={p}
-                  className="relative flex items-center justify-center rounded-2xl ring-1 ring-maroon-200 bg-white py-3 cursor-pointer has-[:checked]:bg-coral-500 has-[:checked]:text-cream-50 has-[:checked]:ring-coral-600 transition-colors"
-                >
-                  <input
-                    type="radio"
-                    name="pace_group"
-                    value={p}
-                    defaultChecked={(profile?.paceGroup ?? "B") === p}
-                    className="sr-only"
-                  />
-                  <span className="font-display font-bold text-xl">{p}</span>
-                </label>
-              ))}
+              {rideTypes.map((t) => {
+                const tone = colorClasses(t.color);
+                return (
+                  <label
+                    key={t.code}
+                    className={`relative flex flex-col items-center justify-center rounded-2xl ring-1 ring-maroon-200 bg-white py-3 cursor-pointer has-[:checked]:${tone.bg.replace("/15", "/30")} has-[:checked]:${tone.text} has-[:checked]:${tone.ring} transition-colors`}
+                    title={t.name}
+                  >
+                    <input
+                      type="radio"
+                      name="pace_group"
+                      value={t.code}
+                      defaultChecked={(profile?.paceGroup ?? "B") === t.code}
+                      className="sr-only"
+                    />
+                    <span className="font-display font-bold text-xl">{t.code}</span>
+                    <span className="text-[10px] mt-0.5 text-ink-soft">{t.name}</span>
+                  </label>
+                );
+              })}
             </div>
           </fieldset>
 

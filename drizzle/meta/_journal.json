@@ -36,6 +36,13 @@
       "when": 1779027411366,
       "tag": "0004_loving_gladiator",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1779030294177,
+      "tag": "0005_pink_stone_men",
+      "breakpoints": true
     }
   ]
 }

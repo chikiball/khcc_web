@@ -22,6 +22,12 @@ export default async function RideDetailPage({ params }: { params: Params }) {
 
   if (!ride) notFound();
 
+  const [rideType] = await db
+    .select()
+    .from(schema.rideTypes)
+    .where(eq(schema.rideTypes.code, ride.paceGroup))
+    .limit(1);
+
   const isManager = canManageRides(user.role);
 
   // Build the RSVP query. Managers also see private emergency-contact data
@@ -116,7 +122,7 @@ export default async function RideDetailPage({ params }: { params: Params }) {
             </h1>
             <p className="text-base text-ink-soft mt-2">{ride.startPointName}</p>
           </div>
-          <PaceBadge pace={ride.paceGroup} />
+          <PaceBadge code={ride.paceGroup} rideType={rideType} />
         </div>
 
         <dl className="mt-6 grid grid-cols-3 gap-2 text-center">

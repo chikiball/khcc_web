@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { db, schema } from "@/db";
-import { desc } from "drizzle-orm";
+import { asc, desc } from "drizzle-orm";
+import { colorClasses } from "@/lib/ride-types";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,11 @@ export default async function AdminRidesPage({
 }) {
   const { status } = await searchParams;
 
-  const rides = await db.select().from(schema.rides).orderBy(desc(schema.rides.startsAt));
+  const [rides, rideTypes] = await Promise.all([
+    db.select().from(schema.rides).orderBy(desc(schema.rides.startsAt)),
+    db.select().from(schema.rideTypes).orderBy(asc(schema.rideTypes.position)),
+  ]);
+  const typeByCode = new Map(rideTypes.map((t) => [t.code, t]));
   const filtered = status ? rides.filter((r) => r.status === status) : rides;
 
   return (
@@ -54,44 +59,49 @@ export default async function AdminRidesPage({
             No rides {status ? `with status "${status}"` : "yet"}.
           </li>
         )}
-        {filtered.map((ride) => (
-          <li
-            key={ride.id}
-            className="rounded-2xl bg-white ring-1 ring-maroon-200/60 px-4 py-3 flex items-center gap-3"
-          >
-            <span
-              className={`inline-flex items-center justify-center w-9 h-9 rounded-xl font-display font-bold text-base ${paceColor(ride.paceGroup)}`}
-              aria-label={`Pace ${ride.paceGroup}`}
+        {filtered.map((ride) => {
+          const t = typeByCode.get(ride.paceGroup);
+          const tone = colorClasses(t?.color ?? "coral");
+          return (
+            <li
+              key={ride.id}
+              className="rounded-2xl bg-white ring-1 ring-maroon-200/60 px-4 py-3 flex items-center gap-3"
             >
-              {ride.paceGroup}
-            </span>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="font-display text-base font-semibold truncate">
-                  {ride.title}
+              <span
+                className={`inline-flex items-center justify-center w-9 h-9 rounded-xl font-display font-bold text-base ring-1 ${tone.bg} ${tone.text} ${tone.ring}`}
+                aria-label={`Pace ${ride.paceGroup}${t ? `, ${t.name}` : ""}`}
+                title={t?.name}
+              >
+                {ride.paceGroup}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="font-display text-base font-semibold truncate">
+                    {ride.title}
+                  </p>
+                  {ride.status !== "scheduled" && <StatusPill status={ride.status} />}
+                </div>
+                <p className="text-xs text-ink-soft mt-0.5">
+                  {new Date(ride.startsAt).toLocaleString(undefined, {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                  {" · "}
+                  {ride.startPointName}
                 </p>
-                {ride.status !== "scheduled" && <StatusPill status={ride.status} />}
               </div>
-              <p className="text-xs text-ink-soft mt-0.5">
-                {new Date(ride.startsAt).toLocaleString(undefined, {
-                  weekday: "short",
-                  day: "numeric",
-                  month: "short",
-                  hour: "numeric",
-                  minute: "2-digit",
-                })}
-                {" · "}
-                {ride.startPointName}
-              </p>
-            </div>
-            <Link
-              href={`/admin/rides/${ride.id}/edit`}
-              className="text-sm text-coral-700 hover:text-coral-800 font-medium"
-            >
-              Edit →
-            </Link>
-          </li>
-        ))}
+              <Link
+                href={`/admin/rides/${ride.id}/edit`}
+                className="text-sm text-coral-700 hover:text-coral-800 font-medium"
+              >
+                Edit →
+              </Link>
+            </li>
+          );
+        })}
       </ul>
     </main>
   );
@@ -126,12 +136,4 @@ function StatusPill({ status }: { status: string }) {
       {STATUS_LABELS[status] ?? status}
     </span>
   );
-}
-
-function paceColor(pace: "A" | "B" | "C") {
-  return {
-    A: "bg-flash-500/15 text-flash-600 ring-1 ring-flash-500/30",
-    B: "bg-coral-400/15 text-coral-700 ring-1 ring-coral-400/30",
-    C: "bg-maroon-700/15 text-maroon-700 ring-1 ring-maroon-700/30",
-  }[pace];
 }

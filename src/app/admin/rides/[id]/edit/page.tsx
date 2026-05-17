@@ -1,7 +1,8 @@
 import { db, schema } from "@/db";
-import { eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { RideForm, type LeaderOption } from "@/components/ride-form";
+import type { RideTypeOption } from "@/lib/ride-types";
 import { CancelRideButton } from "@/components/cancel-ride-button";
 import { updateRide } from "../../actions";
 
@@ -14,6 +15,10 @@ async function getLeaders(): Promise<LeaderOption[]> {
     .select({ id: schema.users.id, name: schema.users.name })
     .from(schema.users)
     .where(inArray(schema.users.role, ["leader", "organiser", "admin"]));
+}
+
+async function getRideTypes(): Promise<RideTypeOption[]> {
+  return db.select().from(schema.rideTypes).orderBy(asc(schema.rideTypes.position));
 }
 
 function toLocalDateTimeInput(d: Date) {
@@ -31,7 +36,7 @@ export default async function EditRidePage({ params }: { params: Params }) {
   const [ride] = await db.select().from(schema.rides).where(eq(schema.rides.id, id)).limit(1);
   if (!ride) notFound();
 
-  const leaders = await getLeaders();
+  const [leaders, rideTypes] = await Promise.all([getLeaders(), getRideTypes()]);
   const isCancelled = ride.status === "cancelled";
   const action = updateRide.bind(null, id);
 
@@ -56,6 +61,7 @@ export default async function EditRidePage({ params }: { params: Params }) {
       <RideForm
         action={action}
         leaders={leaders}
+        rideTypes={rideTypes}
         submitLabel="Save changes"
         readOnly={isCancelled}
         defaultValues={{

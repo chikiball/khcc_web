@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { RsvpButton } from "@/components/rsvp-button";
+import { colorClasses, type RideTypeOption } from "@/lib/ride-types";
 
 type Ride = {
   id: string;
@@ -8,7 +9,7 @@ type Ride = {
   start_point_name: string;
   distance_km: number | null;
   elevation_m: number | null;
-  pace_group: "A" | "B" | "C";
+  pace_group: string;
   status: string;
 };
 
@@ -16,10 +17,12 @@ export function RideCard({
   ride,
   rsvpCount,
   isIn,
+  rideType,
 }: {
   ride: Ride;
   rsvpCount: number;
   isIn: boolean;
+  rideType?: RideTypeOption;
 }) {
   const start = new Date(ride.starts_at);
 
@@ -38,7 +41,7 @@ export function RideCard({
               {ride.start_point_name}
             </p>
           </div>
-          <PaceBadge pace={ride.pace_group} />
+          <PaceBadge code={ride.pace_group} rideType={rideType} />
         </div>
 
         <div className="mt-4 flex items-center gap-4 text-sm text-ink-soft">
@@ -66,19 +69,24 @@ export function RideCard({
   );
 }
 
-export function PaceBadge({ pace }: { pace: "A" | "B" | "C" }) {
-  // Pace is never colour-only — letter is always shown (NFR-6).
-  const tone = {
-    A: "bg-flash-500/15 text-flash-600 ring-flash-500/30",
-    B: "bg-coral-400/15 text-coral-700 ring-coral-400/30",
-    C: "bg-maroon-700/15 text-maroon-700 ring-maroon-700/30",
-  }[pace];
+export function PaceBadge({
+  code,
+  rideType,
+}: {
+  code: string;
+  rideType?: RideTypeOption;
+}) {
+  // Letter is always shown alongside any colour cue (NFR-6 — pace group
+  // never colour-only). Falls back to coral if the type's color preset
+  // is missing or the type isn't passed in.
+  const tone = colorClasses(rideType?.color ?? "coral");
   return (
     <span
-      className={`hex-clip inline-flex shrink-0 items-center justify-center w-12 h-11 ring-1 font-display font-bold text-lg ${tone}`}
-      aria-label={`Pace group ${pace}`}
+      className={`hex-clip inline-flex shrink-0 items-center justify-center w-12 h-11 ring-1 font-display font-bold text-lg ${tone.bg} ${tone.text} ${tone.ring}`}
+      aria-label={`Pace group ${code}${rideType ? `, ${rideType.name}` : ""}`}
+      title={rideType?.name}
     >
-      {pace}
+      {code}
     </span>
   );
 }

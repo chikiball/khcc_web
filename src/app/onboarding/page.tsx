@@ -1,7 +1,8 @@
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/auth-helpers";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
+import { colorClasses } from "@/lib/ride-types";
 import { completeOnboarding } from "./actions";
 
 export const metadata = { title: "Welcome" };
@@ -22,6 +23,14 @@ export default async function OnboardingPage() {
     .limit(1);
 
   if (profile?.onboardedAt) redirect("/rides");
+
+  const rideTypes = await db
+    .select()
+    .from(schema.rideTypes)
+    .where(eq(schema.rideTypes.active, true))
+    .orderBy(asc(schema.rideTypes.position));
+
+  const defaultCode = profile?.paceGroup ?? rideTypes[0]?.code ?? "B";
 
   return (
     <main className="min-h-dvh bg-paper text-ink">
@@ -48,24 +57,29 @@ export default async function OnboardingPage() {
           <fieldset>
             <legend className="text-sm font-medium text-ink">Pace group</legend>
             <p className="text-xs text-ink-soft mt-0.5 mb-2">
-              A — climbers · B — steady bunch · C — no-drop
+              {rideTypes.map((t) => `${t.code} — ${t.name}`).join(" · ")}
             </p>
             <div className="grid grid-cols-3 gap-2">
-              {(["A", "B", "C"] as const).map((p) => (
-                <label
-                  key={p}
-                  className="relative flex items-center justify-center rounded-2xl ring-1 ring-maroon-200 bg-white py-3 cursor-pointer has-[:checked]:bg-coral-500 has-[:checked]:text-cream-50 has-[:checked]:ring-coral-600 transition-colors"
-                >
-                  <input
-                    type="radio"
-                    name="pace_group"
-                    value={p}
-                    defaultChecked={(profile?.paceGroup ?? "B") === p}
-                    className="sr-only"
-                  />
-                  <span className="font-display font-bold text-xl">{p}</span>
-                </label>
-              ))}
+              {rideTypes.map((t) => {
+                const tone = colorClasses(t.color);
+                return (
+                  <label
+                    key={t.code}
+                    className={`relative flex flex-col items-center justify-center rounded-2xl ring-1 ring-maroon-200 bg-white py-3 cursor-pointer has-[:checked]:${tone.bg.replace("/15", "/30")} has-[:checked]:${tone.text} has-[:checked]:${tone.ring} transition-colors`}
+                    title={t.name}
+                  >
+                    <input
+                      type="radio"
+                      name="pace_group"
+                      value={t.code}
+                      defaultChecked={defaultCode === t.code}
+                      className="sr-only"
+                    />
+                    <span className="font-display font-bold text-xl">{t.code}</span>
+                    <span className="text-[10px] mt-0.5 text-ink-soft">{t.name}</span>
+                  </label>
+                );
+              })}
             </div>
           </fieldset>
 

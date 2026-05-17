@@ -3,7 +3,7 @@ import { db, schema } from "@/db";
 import { canManageRides, requireApproved } from "@/lib/auth-helpers";
 import { RideCard } from "@/components/ride-card";
 import { signOut } from "@/app/auth/actions";
-import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, ne } from "drizzle-orm";
 
 export const metadata = { title: "Rides" };
 export const dynamic = "force-dynamic";
@@ -15,26 +15,31 @@ export default async function RidesPage() {
   const horizon = new Date(now);
   horizon.setDate(horizon.getDate() + 14);
 
-  const rides = await db
-    .select({
-      id: schema.rides.id,
-      title: schema.rides.title,
-      starts_at: schema.rides.startsAt,
-      start_point_name: schema.rides.startPointName,
-      distance_km: schema.rides.distanceKm,
-      elevation_m: schema.rides.elevationM,
-      pace_group: schema.rides.paceGroup,
-      status: schema.rides.status,
-    })
-    .from(schema.rides)
-    .where(
-      and(
-        gte(schema.rides.startsAt, now),
-        lte(schema.rides.startsAt, horizon),
-        ne(schema.rides.status, "cancelled"),
-      ),
-    )
-    .orderBy(schema.rides.startsAt);
+  const [rides, rideTypes] = await Promise.all([
+    db
+      .select({
+        id: schema.rides.id,
+        title: schema.rides.title,
+        starts_at: schema.rides.startsAt,
+        start_point_name: schema.rides.startPointName,
+        distance_km: schema.rides.distanceKm,
+        elevation_m: schema.rides.elevationM,
+        pace_group: schema.rides.paceGroup,
+        status: schema.rides.status,
+      })
+      .from(schema.rides)
+      .where(
+        and(
+          gte(schema.rides.startsAt, now),
+          lte(schema.rides.startsAt, horizon),
+          ne(schema.rides.status, "cancelled"),
+        ),
+      )
+      .orderBy(schema.rides.startsAt),
+    db.select().from(schema.rideTypes).orderBy(asc(schema.rideTypes.position)),
+  ]);
+
+  const typeByCode = new Map(rideTypes.map((t) => [t.code, t]));
 
   const rideIds = rides.map((r) => r.id);
   const rsvps = rideIds.length
@@ -121,6 +126,7 @@ export default async function RidesPage() {
             }}
             rsvpCount={counts.get(ride.id) ?? 0}
             isIn={myRsvps.has(ride.id)}
+            rideType={typeByCode.get(ride.pace_group)}
           />
         ))}
       </section>

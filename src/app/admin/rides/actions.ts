@@ -8,20 +8,18 @@ import { eq } from "drizzle-orm";
 
 type RideInput = {
   title: string;
-  starts_at: string; // ISO string from datetime-local + timezone
+  starts_at: string;
   start_point_name: string;
   start_point_lat?: string;
   start_point_lng?: string;
   distance_km?: string;
   elevation_m?: string;
-  pace_group: "A" | "B" | "C";
+  pace_group: string;
   route_url?: string;
   description?: string;
   cap?: string;
   leader_id?: string;
 };
-
-const PACE = ["A", "B", "C"] as const;
 
 function parseRideInput(formData: FormData): RideInput {
   const get = (key: string) => {
@@ -32,12 +30,12 @@ function parseRideInput(formData: FormData): RideInput {
   const title = get("title");
   const starts_at = get("starts_at");
   const start_point_name = get("start_point_name");
-  const pace_group = get("pace_group") as "A" | "B" | "C";
+  const pace_group = get("pace_group");
 
   if (!title) throw new Error("Title is required.");
   if (!starts_at) throw new Error("Date and time is required.");
   if (!start_point_name) throw new Error("Start point is required.");
-  if (!PACE.includes(pace_group)) throw new Error("Pick a pace group.");
+  if (!pace_group) throw new Error("Pick a pace group.");
 
   return {
     title,

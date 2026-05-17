@@ -1,3 +1,5 @@
+import { colorClasses, type RideTypeOption } from "@/lib/ride-types";
+
 type Ride = {
   title?: string | null;
   starts_at?: string | null;
@@ -6,7 +8,7 @@ type Ride = {
   start_point_lng?: string | null;
   distance_km?: string | null;
   elevation_m?: number | null;
-  pace_group?: "A" | "B" | "C" | null;
+  pace_group?: string | null;
   route_url?: string | null;
   description?: string | null;
   cap?: number | null;
@@ -22,16 +24,20 @@ export function RideForm({
   action,
   defaultValues,
   leaders,
+  rideTypes,
   submitLabel,
   readOnly,
 }: {
   action: (formData: FormData) => Promise<void>;
   defaultValues?: Ride;
   leaders: LeaderOption[];
+  rideTypes: RideTypeOption[];
   submitLabel: string;
   readOnly?: boolean;
 }) {
   const v = defaultValues ?? {};
+  const activeTypes = rideTypes.filter((t) => t.active || v.pace_group === t.code);
+  const defaultCode = v.pace_group ?? activeTypes[0]?.code ?? "";
 
   return (
     <form action={action} className="mt-6 space-y-5">
@@ -82,26 +88,33 @@ export function RideForm({
       <fieldset disabled={readOnly}>
         <legend className="text-sm font-medium text-ink">Pace group</legend>
         <p className="text-xs text-ink-soft mt-0.5 mb-2">
-          A — climbers · B — steady bunch · C — no-drop
+          Manage these in <span className="font-medium">Admin → Types</span>.
         </p>
         <div className="grid grid-cols-3 gap-2">
-          {(["A", "B", "C"] as const).map((p) => (
-            <label
-              key={p}
-              className="relative flex items-center justify-center rounded-2xl ring-1 ring-maroon-200 bg-white py-3 cursor-pointer has-[:checked]:bg-coral-500 has-[:checked]:text-cream-50 has-[:checked]:ring-coral-600 has-[:disabled]:opacity-50 transition-colors"
-            >
-              <input
-                type="radio"
-                name="pace_group"
-                value={p}
-                defaultChecked={(v.pace_group ?? "B") === p}
-                required
-                disabled={readOnly}
-                className="sr-only"
-              />
-              <span className="font-display font-bold text-xl">{p}</span>
-            </label>
-          ))}
+          {activeTypes.map((t) => {
+            const tone = colorClasses(t.color);
+            return (
+              <label
+                key={t.code}
+                className={`relative flex flex-col items-center justify-center rounded-2xl ring-1 ring-maroon-200 bg-white py-3 px-2 cursor-pointer has-[:checked]:${tone.bg.replace("/15", "/30")} has-[:checked]:${tone.text} has-[:checked]:${tone.ring} has-[:disabled]:opacity-50 transition-colors`}
+                title={t.name}
+              >
+                <input
+                  type="radio"
+                  name="pace_group"
+                  value={t.code}
+                  defaultChecked={defaultCode === t.code}
+                  required
+                  disabled={readOnly}
+                  className="sr-only"
+                />
+                <span className="font-display font-bold text-xl">{t.code}</span>
+                <span className="text-[10px] mt-0.5 text-ink-soft truncate max-w-full">
+                  {t.name}
+                </span>
+              </label>
+            );
+          })}
         </div>
       </fieldset>
 
