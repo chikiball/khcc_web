@@ -13,8 +13,10 @@ if [ ! -f .env ]; then
 fi
 
 # Ensure the user-uploads bind-mount target exists on the host so docker
-# doesn't create it root-owned.
+# doesn't create it root-owned. Chown to uid:gid 1001:1001 (the nextjs
+# user inside the container) so the app can actually write to it.
 mkdir -p uploads/avatars
+sudo chown -R 1001:1001 uploads 2>/dev/null || chown -R 1001:1001 uploads
 
 echo "--- git pull ---"
 git pull origin main
