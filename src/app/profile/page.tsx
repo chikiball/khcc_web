@@ -9,8 +9,15 @@ import { updateProfile } from "./actions";
 export const metadata = { title: "Your profile" };
 export const dynamic = "force-dynamic";
 
-export default async function ProfilePage() {
+type SearchParams = Promise<{ saved?: string }>;
+
+export default async function ProfilePage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const user = await requireApproved();
+  const { saved } = await searchParams;
 
   // Pull both public and private fields. requireApproved already gates,
   // and joining users_private here is the only path that exposes the
@@ -58,6 +65,12 @@ export default async function ProfilePage() {
         <p className="text-sm text-ink-soft mt-1">
           Signed in as <span className="text-ink">{profile?.email ?? user.email}</span>
         </p>
+
+        {saved && (
+          <div className="mt-4 rounded-2xl bg-coral-100 ring-1 ring-coral-300 px-4 py-3 text-sm text-coral-800">
+            ✓ Saved.
+          </div>
+        )}
 
         {/*
           Single form with multipart encoding so the avatar file rides

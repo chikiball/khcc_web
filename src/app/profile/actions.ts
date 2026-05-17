@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import { requireApproved } from "@/lib/auth-helpers";
 import { processAvatar } from "@/lib/upload";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 
 const PACE = ["A", "B", "C"] as const;
@@ -63,4 +64,8 @@ export async function updateProfile(formData: FormData) {
 
   revalidatePath("/profile");
   revalidatePath("/rides");
+  // Redirect so the page fully remounts — the AvatarPicker's React state
+  // resets to the freshly-saved image URL instead of clinging to the local
+  // blob URL preview, and the user sees the actual server-side avatar.
+  redirect("/profile?saved=1");
 }
