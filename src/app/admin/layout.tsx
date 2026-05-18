@@ -2,6 +2,7 @@ import { canManageRides } from "@/lib/auth-helpers";
 import { requireApproved } from "@/lib/auth-helpers";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { AdminMobileMenu } from "@/components/admin-mobile-menu";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   // Single chokepoint — every /admin/* route runs through this gate.
@@ -41,28 +42,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           ))}
         </nav>
 
-        {/* Hamburger dropdown on mobile — uses native <details> so no JS */}
-        <details className="sm:hidden relative admin-menu">
-          <summary
-            aria-label="Admin menu"
-            className="list-none [&::-webkit-details-marker]:hidden cursor-pointer rounded-xl ring-1 ring-maroon-200 bg-white px-3 py-2 text-ink-soft hover:text-ink select-none"
-          >
-            <span className="block w-5 h-0.5 bg-current mb-1" />
-            <span className="block w-5 h-0.5 bg-current mb-1" />
-            <span className="block w-5 h-0.5 bg-current" />
-          </summary>
-          <nav className="absolute right-0 top-full mt-2 z-20 min-w-[10rem] rounded-2xl bg-white ring-1 ring-maroon-200 shadow-lg p-1 text-sm">
-            {links.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                className="block px-3 py-2 rounded-xl text-ink hover:bg-cream-100"
-              >
-                {l.label}
-              </Link>
-            ))}
-          </nav>
-        </details>
+        {/* Hamburger dropdown on mobile — closes on outside tap or Escape */}
+        <AdminMobileMenu links={links} />
       </header>
       {children}
     </div>
