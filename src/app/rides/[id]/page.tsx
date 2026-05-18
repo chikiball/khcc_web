@@ -248,12 +248,12 @@ export default async function RideDetailPage({ params }: { params: Params }) {
                       {pgRsvps.map((r) => (
                         <li key={r.userId}
                           className={isManager ? "rounded-xl bg-cream-50 ring-1 ring-maroon-200/60 px-3 py-2" : "inline-flex items-center gap-2 rounded-full bg-white ring-1 ring-maroon-200/60 pl-1 pr-3 py-1"}>
-                          <div className={`flex items-center gap-2 ${isManager ? "" : ""}`}>
+                          <Link href={`/members/${r.userId}`} className="flex items-center gap-2 hover:opacity-80">
                             {r.image
                               ? <img src={r.image} alt="" className={isManager ? "size-8 rounded-full object-cover" : "size-7 rounded-full object-cover"} /> // eslint-disable-line @next/next/no-img-element
                               : <span className={`${isManager ? "size-8" : "size-7"} rounded-full bg-coral-200 text-coral-800 inline-flex items-center justify-center text-xs font-bold`}>{(r.name ?? "?")[0]?.toUpperCase()}</span>}
                             <span className="text-sm text-ink">{r.name ?? "Rider"}</span>
-                          </div>
+                          </Link>
                           {isManager && (
                             <p className="text-xs text-ink-soft mt-1 pl-10">
                               {(r.emergencyName || r.emergencyPhone)

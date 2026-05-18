@@ -95,6 +95,7 @@ export default async function RidesPage() {
             </Link>
           )}
           <Link href="/profile" className="text-sm text-ink-soft hover:text-ink underline-offset-4 hover:underline">Profile</Link>
+          <Link href="/members" className="text-sm text-ink-soft hover:text-ink underline-offset-4 hover:underline">Members</Link>
           <form action={signOut}>
             <button className="text-sm text-ink-soft hover:text-ink underline-offset-4 hover:underline">Sign out</button>
           </form>
