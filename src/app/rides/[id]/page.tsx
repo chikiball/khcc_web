@@ -40,7 +40,7 @@ export default async function RideDetailPage({ params }: { params: Params }) {
 
   const isManager = canManageRides(user.role);
 
-  const [paceGroups, allRideTypes, gpx, forecast] = await Promise.all([
+  const [paceGroups, allRideTypes, gpx, forecast, seriesRow] = await Promise.all([
     db.select().from(schema.ridePaceGroups)
       .where(eq(schema.ridePaceGroups.rideId, id))
       .orderBy(asc(schema.ridePaceGroups.position)),
@@ -49,7 +49,14 @@ export default async function RideDetailPage({ params }: { params: Params }) {
     ride.startPointLat && ride.startPointLng
       ? getRideForecast(Number(ride.startPointLat), Number(ride.startPointLng), ride.startsAt)
       : Promise.resolve(null),
+    ride.seriesId
+      ? db.select({ rule: schema.rideSeries.rule })
+          .from(schema.rideSeries)
+          .where(eq(schema.rideSeries.id, ride.seriesId))
+          .limit(1)
+      : Promise.resolve([]),
   ]);
+  const seriesRule = seriesRow[0]?.rule ?? null;
 
   const typeByCode = new Map(allRideTypes.map((t) => [t.code, t]));
 
@@ -107,7 +114,14 @@ export default async function RideDetailPage({ params }: { params: Params }) {
             {start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
           </p>
           <h1 className="font-display text-3xl font-bold mt-1 leading-tight">{ride.title}</h1>
-          <p className="text-base text-ink-soft mt-2">{ride.startPointName}</p>
+          <p className="text-base text-ink-soft mt-2">
+            {ride.startPointName}
+            {seriesRule && (
+              <span className="ml-2 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-maroon-100 text-maroon-700 align-middle">
+                {seriesRule === "biweekly" ? "Biweekly" : "Weekly"}
+              </span>
+            )}
+          </p>
         </div>
 
         <dl className="mt-6 grid grid-cols-3 gap-2 text-center">

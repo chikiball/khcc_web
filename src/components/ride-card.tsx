@@ -22,11 +22,13 @@ export function RideCard({
   paces,
   previewUrl,
   forecast,
+  seriesRule,
 }: {
   ride: Ride;
   paces: PaceWithCount[];
   previewUrl?: string | null;
   forecast?: RideForecast | null;
+  seriesRule?: string | null;
 }) {
   const start = new Date(ride.starts_at);
   const totalCount = paces.reduce((s, p) => s + p.count, 0);
@@ -65,7 +67,14 @@ export function RideCard({
             <h3 className="mt-1 font-display text-xl font-semibold text-ink truncate">
               {ride.title}
             </h3>
-            <p className="text-sm text-ink-soft mt-0.5 truncate">{ride.start_point_name}</p>
+            <p className="text-sm text-ink-soft mt-0.5 truncate">
+              {ride.start_point_name}
+              {seriesRule && (
+                <span className="ml-2 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-maroon-100 text-maroon-700 align-middle">
+                  {seriesRule === "biweekly" ? "Biweekly" : "Weekly"}
+                </span>
+              )}
+            </p>
           </div>
 
           {/* Pace strip with per-pace RSVP counts */}

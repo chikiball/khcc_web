@@ -268,6 +268,22 @@ export async function cancelRide(rideId: string, formData: FormData) {
     updatedAt: new Date(),
   }).where(eq(schema.ridePaceGroups.rideId, rideId));
 
+  // If this ride was part of an active recurring series, immediately
+  // materialise the next occurrence so the rides list isn't left empty.
+  const [cancelled] = await db
+    .select({ seriesId: schema.rides.seriesId })
+    .from(schema.rides)
+    .where(eq(schema.rides.id, rideId))
+    .limit(1);
+  if (cancelled?.seriesId) {
+    const [series] = await db
+      .select()
+      .from(schema.rideSeries)
+      .where(eq(schema.rideSeries.id, cancelled.seriesId))
+      .limit(1);
+    if (series?.active) await materializeSeries(series);
+  }
+
   revalidatePath("/rides");
   revalidatePath(`/rides/${rideId}`);
   revalidatePath("/admin/rides");
@@ -320,6 +336,21 @@ export async function cancelPaceGroup(paceGroupId: string, formData: FormData) {
         cancelledReason: "All pace groups cancelled.",
         updatedAt: new Date(),
       }).where(eq(schema.rides.id, rideId));
+
+      // Recurring? Spawn the next occurrence so the list isn't empty.
+      const [parent] = await db
+        .select({ seriesId: schema.rides.seriesId })
+        .from(schema.rides)
+        .where(eq(schema.rides.id, rideId))
+        .limit(1);
+      if (parent?.seriesId) {
+        const [series] = await db
+          .select()
+          .from(schema.rideSeries)
+          .where(eq(schema.rideSeries.id, parent.seriesId))
+          .limit(1);
+        if (series?.active) await materializeSeries(series);
+      }
     }
     revalidatePath(`/rides/${rideId}`);
     revalidatePath("/admin/rides");

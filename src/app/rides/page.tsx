@@ -31,7 +31,9 @@ export default async function RidesPage() {
       starts_at: schema.rides.startsAt, start_point_name: schema.rides.startPointName,
       start_point_lat: schema.rides.startPointLat, start_point_lng: schema.rides.startPointLng,
       status: schema.rides.status,
+      series_rule: schema.rideSeries.rule,
     }).from(schema.rides)
+      .leftJoin(schema.rideSeries, eq(schema.rideSeries.id, schema.rides.seriesId))
       .where(and(gte(schema.rides.startsAt, now), lte(schema.rides.startsAt, horizon), ne(schema.rides.status, "cancelled")))
       .orderBy(schema.rides.startsAt),
     db.select().from(schema.rideTypes).orderBy(asc(schema.rideTypes.position)) as Promise<RideTypeOption[]>,
@@ -120,6 +122,7 @@ export default async function RidesPage() {
               paces={ridePageGroups.map((pg) => ({ paceGroup: pg, rideType: typeByCode.get(pg.paceCode), count: countByPace.get(pg.id) ?? 0 }))}
               previewUrl={previewByRide.get(ride.id) ?? null}
               forecast={forecastByRide.get(ride.id) ?? null}
+              seriesRule={ride.series_rule}
             />
           );
         })}

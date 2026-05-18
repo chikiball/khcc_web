@@ -1,17 +1,29 @@
 import { db, schema } from "@/db";
-import { and, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray } from "drizzle-orm";
 import type { RideSeries } from "@/db/schema";
 import type { PaceGroupInput } from "@/app/admin/rides/actions";
 
-const WEEKS_AHEAD = 4;
+/**
+ * Lazy materialisation: a recurring series only ever has ONE live future
+ * occurrence at a time. When that occurrence passes (or is cancelled), the
+ * next call to materializeSeries() spawns the following one. Keeps the
+ * member-facing rides list short and obvious instead of a wall of
+ * "every Saturday for the next month" rows.
+ *
+ * Trigger points: cron (idempotent sweep), series creation, ride/pace
+ * cancellation that takes the whole ride down.
+ */
+
+const SAFETY_HORIZON_DAYS = 60;
 
 /**
- * Compute the dates of the next N occurrences of a series starting
- * strictly after `from` and not past `through`.
+ * Compute the dates of the next occurrences of a series strictly after
+ * `from` and not past `through`. Used by materializeSeries() to find the
+ * single next slot — we only ever consume dates[0].
  *
  * The weekday and time-of-day from the series template are used so the
- * schedule is stable even if an individual occurrence is cancelled or
- * rescheduled — the series still ticks on the right day each week.
+ * schedule is stable even if an individual occurrence is cancelled —
+ * the series still ticks on the right day each week.
  */
 export function generateOccurrences(
   series: Pick<RideSeries, "rule" | "weekday" | "timeOfDay">,
@@ -22,10 +34,9 @@ export function generateOccurrences(
   const interval = series.rule === "biweekly" ? 14 : 7;
   const dates: Date[] = [];
 
-  // Step forward one day at a time until we hit the right weekday
   const candidate = new Date(from);
   candidate.setHours(hh, mm, 0, 0);
-  // Start from the next full day after `from`
+  // Strictly after `from` — step at least one day forward
   candidate.setDate(candidate.getDate() + 1);
   while (candidate.getDay() !== series.weekday) {
     candidate.setDate(candidate.getDate() + 1);
@@ -40,77 +51,107 @@ export function generateOccurrences(
 }
 
 /**
- * Materialise all missing occurrences for `series` within the next
- * WEEKS_AHEAD weeks. Returns the number of new rides created.
+ * Ensure exactly one live future occurrence exists for `series`. Returns
+ * the number of new rides created (0 or 1).
  *
- * Each call is idempotent — it checks whether a ride already exists
- * for (series_id, starts_at) before inserting.
+ * Also sweeps stale extras: any future occurrences for this series with
+ * zero RSVPs beyond the soonest live one get deleted. This cleans up
+ * data left over from the previous 4-week-ahead strategy and keeps the
+ * one-occurrence invariant tidy if a series rule changes.
  */
 export async function materializeSeries(series: RideSeries): Promise<number> {
-  const from = series.materializeThroughAt ?? new Date(0);
-  const through = new Date();
-  through.setDate(through.getDate() + WEEKS_AHEAD * 7);
+  const now = new Date();
 
-  const dates = generateOccurrences(series, from, through);
-  if (dates.length === 0) return 0;
+  // Step 1 — find all future occurrences for this series, soonest first.
+  const future = await db
+    .select({ id: schema.rides.id, startsAt: schema.rides.startsAt, status: schema.rides.status })
+    .from(schema.rides)
+    .where(and(eq(schema.rides.seriesId, series.id), gt(schema.rides.startsAt, now)))
+    .orderBy(asc(schema.rides.startsAt));
 
-  let created = 0;
-  const templates = JSON.parse(series.paceGroupsTemplate) as PaceGroupInput[];
+  // Step 2 — sweep extras. Keep the soonest non-cancelled future ride; delete
+  // the rest if they have no RSVPs (FK cascade handles pace groups).
+  const liveFuture = future.filter((r) => r.status !== "cancelled");
+  const keepId = liveFuture[0]?.id;
+  const candidatesToDelete = future.filter((r) => r.id !== keepId).map((r) => r.id);
 
-  for (const date of dates) {
-    // Idempotency check
-    const existing = await db
-      .select({ id: schema.rides.id })
-      .from(schema.rides)
-      .where(
-        and(
-          eq(schema.rides.seriesId, series.id),
-          eq(schema.rides.startsAt, date),
-        ),
-      )
-      .limit(1);
-    if (existing.length > 0) continue;
-
-    const [ride] = await db
-      .insert(schema.rides)
-      .values({
-        title: series.title,
-        startsAt: date,
-        startPointName: series.startPointName,
-        startPointLat: series.startPointLat,
-        startPointLng: series.startPointLng,
-        distanceKm: series.distanceKm,
-        elevationM: series.elevationM,
-        routeUrl: series.routeUrl,
-        description: series.description,
-        seriesId: series.id,
-      })
-      .returning({ id: schema.rides.id });
-
-    // Materialise pace groups from template
-    if (templates.length > 0) {
-      await db.insert(schema.ridePaceGroups).values(
-        templates.map((pg, i) => ({
-          rideId: ride.id,
-          paceCode: pg.pace_code,
-          leaderId: pg.leader_id ?? null,
-          distanceKm: pg.distance_km ?? null,
-          elevationM: pg.elevation_m ? Number(pg.elevation_m) : null,
-          cap: pg.cap ? Number(pg.cap) : null,
-          notes: pg.notes ?? null,
-          position: pg.position ?? i,
-        })),
-      );
+  if (candidatesToDelete.length > 0) {
+    const withRsvps = await db
+      .select({ rideId: schema.rideRsvps.rideId })
+      .from(schema.rideRsvps)
+      .where(inArray(schema.rideRsvps.rideId, candidatesToDelete))
+      .groupBy(schema.rideRsvps.rideId);
+    const protect = new Set(withRsvps.map((r) => r.rideId));
+    const toDelete = candidatesToDelete.filter((id) => !protect.has(id));
+    if (toDelete.length > 0) {
+      await db.delete(schema.rides).where(inArray(schema.rides.id, toDelete));
     }
-
-    created++;
   }
 
-  // Advance the watermark so the next cron call doesn't re-scan old dates
+  // Step 3 — if a live future occurrence already exists, we're done.
+  if (keepId) return 0;
+
+  // Step 4 — find pivot date (latest ride of any status) and generate next.
+  const [latest] = await db
+    .select({ startsAt: schema.rides.startsAt })
+    .from(schema.rides)
+    .where(eq(schema.rides.seriesId, series.id))
+    .orderBy(desc(schema.rides.startsAt))
+    .limit(1);
+
+  const pivot = latest?.startsAt ?? now;
+  const through = new Date(now);
+  through.setDate(through.getDate() + SAFETY_HORIZON_DAYS);
+
+  const dates = generateOccurrences(series, pivot, through);
+  if (dates.length === 0) return 0;
+  const date = dates[0];
+
+  // Idempotency — race-safe even if two cron runs collide.
+  const existing = await db
+    .select({ id: schema.rides.id })
+    .from(schema.rides)
+    .where(and(eq(schema.rides.seriesId, series.id), eq(schema.rides.startsAt, date)))
+    .limit(1);
+  if (existing.length > 0) return 0;
+
+  const templates = JSON.parse(series.paceGroupsTemplate) as PaceGroupInput[];
+
+  const [ride] = await db
+    .insert(schema.rides)
+    .values({
+      title: series.title,
+      startsAt: date,
+      startPointName: series.startPointName,
+      startPointLat: series.startPointLat,
+      startPointLng: series.startPointLng,
+      distanceKm: series.distanceKm,
+      elevationM: series.elevationM,
+      routeUrl: series.routeUrl,
+      description: series.description,
+      seriesId: series.id,
+    })
+    .returning({ id: schema.rides.id });
+
+  if (templates.length > 0) {
+    await db.insert(schema.ridePaceGroups).values(
+      templates.map((pg, i) => ({
+        rideId: ride.id,
+        paceCode: pg.pace_code,
+        leaderId: pg.leader_id ?? null,
+        distanceKm: pg.distance_km ?? null,
+        elevationM: pg.elevation_m ? Number(pg.elevation_m) : null,
+        cap: pg.cap ? Number(pg.cap) : null,
+        notes: pg.notes ?? null,
+        position: pg.position ?? i,
+      })),
+    );
+  }
+
   await db
     .update(schema.rideSeries)
-    .set({ materializeThroughAt: through, updatedAt: new Date() })
+    .set({ updatedAt: new Date() })
     .where(eq(schema.rideSeries.id, series.id));
 
-  return created;
+  return 1;
 }
