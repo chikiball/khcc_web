@@ -194,6 +194,12 @@ export default async function ProfilePage({
             Save
           </button>
         </form>
+
+        <p className="mt-10 text-center text-xs text-ink-soft">
+          <Link href="/terms" className="hover:text-ink underline-offset-4 hover:underline">
+            View member agreement
+          </Link>
+        </p>
       </div>
     </main>
   );

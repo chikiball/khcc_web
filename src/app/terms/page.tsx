@@ -2,7 +2,7 @@ import { db, schema } from "@/db";
 import { requireUser } from "@/lib/auth-helpers";
 import { TERMS_EFFECTIVE_DATE, TERMS_SECTIONS } from "@/lib/terms";
 import { eq } from "drizzle-orm";
-import { redirect } from "next/navigation";
+import Link from "next/link";
 import { AcceptForm } from "./accept-form";
 
 export const metadata = { title: "Member agreement" };
@@ -10,14 +10,13 @@ export const metadata = { title: "Member agreement" };
 export default async function TermsPage() {
   const user = await requireUser();
 
-  // If they've already accepted, send them along — nothing to do here.
   const [row] = await db
     .select({ acceptedTermsAt: schema.users.acceptedTermsAt })
     .from(schema.users)
     .where(eq(schema.users.id, user.id))
     .limit(1);
 
-  if (row?.acceptedTermsAt) redirect("/rides");
+  const alreadyAccepted = !!row?.acceptedTermsAt;
 
   return (
     <main className="min-h-dvh bg-paper text-ink">
@@ -26,13 +25,25 @@ export default async function TermsPage() {
           KHCC
         </span>
         <h1 className="mt-6 font-display text-3xl font-bold leading-tight">
-          Before we ride.
+          {alreadyAccepted ? "Member agreement." : "Before we ride."}
         </h1>
-        <p className="mt-2 text-sm text-ink-soft">
-          Quick read — the rules of the club site, the data we keep, and the
-          fact that road cycling is dangerous and you accept that. Have a
-          look, then tick the box at the bottom to continue.
-        </p>
+        {alreadyAccepted ? (
+          <p className="mt-2 text-sm text-ink-soft">
+            You accepted these terms on{" "}
+            {row!.acceptedTermsAt!.toLocaleDateString(undefined, {
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            })}
+            .
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-ink-soft">
+            Quick read — the rules of the club site, the data we keep, and the
+            fact that road cycling is dangerous and you accept that. Have a
+            look, then tick the box at the bottom to continue.
+          </p>
+        )}
         <p className="mt-1 text-xs text-ink-soft/70">
           Effective {TERMS_EFFECTIVE_DATE}
         </p>
@@ -52,7 +63,18 @@ export default async function TermsPage() {
           ))}
         </article>
 
-        <AcceptForm />
+        {alreadyAccepted ? (
+          <div className="mt-8">
+            <Link
+              href="/profile"
+              className="inline-flex items-center justify-center rounded-2xl ring-1 ring-maroon-200 bg-white hover:bg-cream-100 text-ink px-5 py-3 text-sm font-semibold"
+            >
+              ← Back to profile
+            </Link>
+          </div>
+        ) : (
+          <AcceptForm />
+        )}
       </div>
     </main>
   );
