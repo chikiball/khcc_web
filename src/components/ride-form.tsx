@@ -144,6 +144,24 @@ export function RideForm({
         </p>
       )}
 
+      {/* Recurring options — only on new-ride form (not edit) */}
+      {!readOnly && !defaultValues?.title && (
+        <fieldset>
+          <legend className="text-sm font-medium text-ink">Repeats</legend>
+          <div className="mt-2 flex flex-wrap gap-3 text-sm">
+            {(["none", "weekly", "biweekly"] as const).map((val) => (
+              <label key={val} className="inline-flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="recurrence" value={val} defaultChecked={val === "none"} className="accent-coral-500" />
+                <span>{{ none: "No — one-off", weekly: "Every week", biweekly: "Every 2 weeks" }[val]}</span>
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-ink-soft mt-1">
+            Recurring rides materialise 4 weeks in advance. A weekly cron extends them automatically.
+          </p>
+        </fieldset>
+      )}
+
       {!readOnly && (
         <button
           type="submit"

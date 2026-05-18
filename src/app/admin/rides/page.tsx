@@ -17,13 +17,16 @@ type SearchParams = Promise<{ status?: string }>;
 export default async function AdminRidesPage({ searchParams }: { searchParams: SearchParams }) {
   const { status } = await searchParams;
 
-  const [rides, paceGroups, rideTypes] = await Promise.all([
+  const [rides, paceGroups, rideTypes, seriesList] = await Promise.all([
     db.select().from(schema.rides).orderBy(desc(schema.rides.startsAt)),
     db.select().from(schema.ridePaceGroups).orderBy(asc(schema.ridePaceGroups.position)),
     db.select().from(schema.rideTypes).orderBy(asc(schema.rideTypes.position)),
+    db.select({ id: schema.rideSeries.id, rule: schema.rideSeries.rule, active: schema.rideSeries.active })
+      .from(schema.rideSeries),
   ]);
 
   const typeByCode = new Map(rideTypes.map((t) => [t.code, t]));
+  const seriesById = new Map(seriesList.map((s) => [s.id, s]));
   const pacesByRide = new Map<string, typeof paceGroups>();
   for (const pg of paceGroups) {
     if (!pacesByRide.has(pg.rideId)) pacesByRide.set(pg.rideId, []);
@@ -81,6 +84,14 @@ export default async function AdminRidesPage({ searchParams }: { searchParams: S
                 <div className="flex items-center gap-2">
                   <p className="font-display text-base font-semibold truncate">{ride.title}</p>
                   {ride.status !== "scheduled" && <StatusPill status={ride.status} />}
+                  {ride.seriesId && (() => {
+                    const s = seriesById.get(ride.seriesId);
+                    return s ? (
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">
+                        ↻ {s.rule}
+                      </span>
+                    ) : null;
+                  })()}
                 </div>
                 <p className="text-xs text-ink-soft mt-0.5 truncate">
                   {new Date(ride.startsAt).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}

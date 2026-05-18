@@ -109,6 +109,38 @@ export const usersPrivate = pgTable("users_private", {
 });
 
 // ===========================================================================
+// Ride series — recurring ride templates
+// ===========================================================================
+// A series owns the schedule (weekday, time, rule) and a JSON snapshot of
+// the pace groups. Materialised rides reference the series via series_id.
+// The cron at /api/cron/materialize-rides keeps the next 4 weeks filled.
+
+export const rideSeries = pgTable("ride_series", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  title: text("title").notNull(),
+  rule: text("rule").notNull(),        // "weekly" | "biweekly"
+  weekday: integer("weekday").notNull(), // 0=Sun … 6=Sat (derived from first starts_at)
+  timeOfDay: text("time_of_day").notNull(), // "HH:MM" e.g. "05:45"
+  startPointName: text("start_point_name").notNull(),
+  startPointLat: numeric("start_point_lat", { precision: 10, scale: 6 }),
+  startPointLng: numeric("start_point_lng", { precision: 10, scale: 6 }),
+  distanceKm: numeric("distance_km", { precision: 6, scale: 2 }),
+  elevationM: integer("elevation_m"),
+  routeUrl: text("route_url"),
+  description: text("description"),
+  // JSON snapshot of pace groups (PaceGroupInput[] without id/status)
+  paceGroupsTemplate: text("pace_groups_template").notNull().default("[]"),
+  active: boolean("active").notNull().default(true),
+  // Latest date through which occurrences have been materialised. The cron
+  // picks up from here and generates forward to now + 4 weeks.
+  materializeThroughAt: timestamp("materialize_through_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+export type RideSeries = typeof rideSeries.$inferSelect;
+
+// ===========================================================================
 // Rides — shared event header
 // ===========================================================================
 // Per-pace details (leader, cap, distance override, etc.) live in
@@ -129,6 +161,8 @@ export const rides = pgTable(
     elevationM: integer("elevation_m"),
     routeUrl: text("route_url"),
     description: text("description"),
+    // Null for one-off rides; set for materialised occurrences of a series.
+    seriesId: text("series_id").references(() => rideSeries.id, { onDelete: "set null" }),
     status: rideStatusEnum("status").notNull().default("scheduled"),
     cancelledAt: timestamp("cancelled_at", { mode: "date" }),
     cancelledBy: text("cancelled_by").references(() => users.id, { onDelete: "set null" }),

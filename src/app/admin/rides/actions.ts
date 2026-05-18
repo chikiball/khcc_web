@@ -5,6 +5,7 @@ import { requireRideManager } from "@/lib/auth-helpers";
 import { parseGpx, parseGpxCoords } from "@/lib/gpx";
 import { saveRouteGpx } from "@/lib/upload";
 import { generateRoutePreview } from "@/lib/static-map";
+import { materializeSeries } from "@/lib/series";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { asc, eq, inArray } from "drizzle-orm";
@@ -160,6 +161,50 @@ export async function createRide(formData: FormData) {
   const paceGroups = parsePaceGroups(formData);
   const gpx = await maybeMergeGpx(formData, input);
 
+  // Check if this is a recurring ride
+  const recurrence = (String(formData.get("recurrence") ?? "")).trim();
+  if (recurrence === "weekly" || recurrence === "biweekly") {
+    // Build the time-of-day from the starts_at field
+    const startsAt = new Date(input.starts_at);
+    const hh = String(startsAt.getHours()).padStart(2, "0");
+    const mm = String(startsAt.getMinutes()).padStart(2, "0");
+
+    const [series] = await db.insert(schema.rideSeries).values({
+      title: input.title,
+      rule: recurrence,
+      weekday: startsAt.getDay(),
+      timeOfDay: `${hh}:${mm}`,
+      startPointName: input.start_point_name,
+      startPointLat: input.start_point_lat ?? null,
+      startPointLng: input.start_point_lng ?? null,
+      distanceKm: input.distance_km ?? null,
+      elevationM: input.elevation_m ? Number(input.elevation_m) : null,
+      routeUrl: input.route_url ?? null,
+      description: input.description ?? null,
+      paceGroupsTemplate: JSON.stringify(paceGroups),
+    }).returning();
+
+    // Materialise the first occurrence on the exact selected date PLUS
+    // subsequent ones within 4 weeks
+    const firstRide = await db.insert(schema.rides).values({
+      ...rideRow(input),
+      seriesId: series.id,
+    }).returning({ id: schema.rides.id });
+    await syncPaceGroups(firstRide[0].id, paceGroups, "");
+    if (gpx) {
+      await saveRouteGpx(gpx.file, firstRide[0].id);
+      await tryGeneratePreview(gpx.text, firstRide[0].id);
+    }
+
+    // Materialise additional occurrences for the next 4 weeks
+    await materializeSeries(series);
+
+    revalidatePath("/rides");
+    revalidatePath("/admin/rides");
+    redirect("/admin/rides");
+  }
+
+  // One-off ride
   const [created] = await db
     .insert(schema.rides)
     .values(rideRow(input))
@@ -291,4 +336,14 @@ export async function loadPaceGroups(rideId: string) {
     .from(schema.ridePaceGroups)
     .where(eq(schema.ridePaceGroups.rideId, rideId))
     .orderBy(asc(schema.ridePaceGroups.position));
+}
+
+export async function stopSeries(seriesId: string) {
+  await requireRideManager();
+  await db
+    .update(schema.rideSeries)
+    .set({ active: false, updatedAt: new Date() })
+    .where(eq(schema.rideSeries.id, seriesId));
+  revalidatePath("/admin/rides");
+  redirect("/admin/rides");
 }

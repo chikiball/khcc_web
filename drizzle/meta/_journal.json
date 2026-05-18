@@ -50,6 +50,13 @@
       "when": 1779084008726,
       "tag": "0006_furry_champions",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1779087436064,
+      "tag": "0007_wonderful_pandemic",
+      "breakpoints": true
     }
   ]
 }

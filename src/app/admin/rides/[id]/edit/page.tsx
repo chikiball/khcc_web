@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { RideForm, type LeaderOption } from "@/components/ride-form";
 import type { RideTypeOption } from "@/lib/ride-types";
 import { CancelRideButton } from "@/components/cancel-ride-button";
-import { updateRide } from "../../actions";
+import { updateRide, stopSeries } from "../../actions";
 import type { PaceGroupInput } from "../../actions";
 import { PaceCancelButtons } from "@/components/pace-cancel-buttons";
 
@@ -20,7 +20,14 @@ function toLocalDateTimeInput(d: Date) {
 export default async function EditRidePage({ params }: { params: Params }) {
   const { id } = await params;
 
-  const [ride] = await db.select().from(schema.rides).where(eq(schema.rides.id, id)).limit(1);
+  const [ride, seriesResult] = await Promise.all([
+    db.select().from(schema.rides).where(eq(schema.rides.id, id)).limit(1).then((r) => r[0]),
+    db.select().from(schema.rides).where(eq(schema.rides.id, id)).limit(1)
+      .then(async (r) => r[0]?.seriesId
+        ? db.select().from(schema.rideSeries).where(eq(schema.rideSeries.id, r[0].seriesId)).limit(1)
+        : []),
+  ]);
+  const series = seriesResult[0] ?? null;
   if (!ride) notFound();
 
   const [paceGroups, leaders, rideTypes] = await Promise.all([
@@ -83,6 +90,33 @@ export default async function EditRidePage({ params }: { params: Params }) {
 
       {!isCancelled && (
         <div className="mt-10 pt-6 border-t border-maroon-200/40 space-y-6">
+
+          {series && series.active && (
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-maroon-700">
+                Recurring series
+              </h2>
+              <p className="text-sm text-ink-soft mt-1 mb-3">
+                This ride is part of a <strong>{series.rule}</strong> series
+                ({["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][series.weekday]}s at {series.timeOfDay}).
+                Stopping the series prevents future occurrences from being created;
+                existing rides (including this one) are unaffected.
+              </p>
+              <form action={stopSeries.bind(null, series.id)}>
+                <button type="submit"
+                  className="inline-flex items-center justify-center rounded-2xl bg-maroon-700 hover:bg-maroon-800 text-cream-50 px-5 py-2.5 text-sm font-semibold active:scale-[0.98] transition-transform">
+                  Stop this series
+                </button>
+              </form>
+            </div>
+          )}
+
+          {series && !series.active && (
+            <p className="text-sm text-ink-soft">
+              ↻ This was part of a <strong>{series.rule}</strong> series — the series has been stopped.
+              No further rides will be auto-created from it.
+            </p>
+          )}
           <div>
             <h2 className="text-sm font-semibold uppercase tracking-wider text-maroon-700">
               Cancel individual paces
