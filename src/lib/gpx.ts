@@ -71,3 +71,30 @@ function haversine(a: GpxPoint, b: GpxPoint): number {
     Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinDLng * sinDLng;
   return 2 * R * Math.asin(Math.sqrt(h));
 }
+
+/**
+ * Extract just the [lat, lng] coordinates from a GPX file for map rendering.
+ * Decimates by stride to keep the result ≤ MAX_POINTS — visually identical to
+ * the full track at typical zoom levels but a fraction of the JSON payload.
+ */
+const MAX_POINTS = 2000;
+
+export function parseGpxCoords(xml: string): [number, number][] {
+  const all: [number, number][] = [];
+  let match: RegExpExecArray | null;
+  TRKPT_RE.lastIndex = 0;
+  while ((match = TRKPT_RE.exec(xml)) !== null) {
+    const lat = Number(match[1]);
+    const lng = Number(match[2]);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) all.push([lat, lng]);
+  }
+  if (all.length <= MAX_POINTS) return all;
+
+  // Stride-decimate. Always keep the first and last points so the start
+  // pin and the endpoint of the line remain accurate.
+  const stride = Math.ceil(all.length / MAX_POINTS);
+  const out: [number, number][] = [];
+  for (let i = 0; i < all.length; i += stride) out.push(all[i]);
+  if (out[out.length - 1] !== all[all.length - 1]) out.push(all[all.length - 1]);
+  return out;
+}

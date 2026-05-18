@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { readFile, stat } from "node:fs/promises";
+import path from "node:path";
 import { db, schema } from "@/db";
 import { canManageRides, requireApproved } from "@/lib/auth-helpers";
+import { parseGpxCoords } from "@/lib/gpx";
 import { RsvpButton } from "@/components/rsvp-button";
 import { PaceBadge } from "@/components/ride-card";
 import { RideDetailMap } from "@/components/ride-detail-map";
@@ -10,6 +13,45 @@ import { and, eq } from "drizzle-orm";
 type Params = Promise<{ id: string }>;
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Return GPX route data if a .gpx file exists for this ride. Filesystem
+ * stat → read → parse on every request; coords are decimated to ≤2000
+ * points so the JSON inlined into HTML stays small even for a 100 km ride.
+ * Silent on any error: no file, malformed XML, etc. → page renders without
+ * the map line and the download link, exactly like a ride with no GPX.
+ */
+async function loadGpxRoute(rideId: string) {
+  const filePath = path.join(
+    process.cwd(),
+    "public",
+    "uploads",
+    "routes",
+    `${rideId}.gpx`,
+  );
+  try {
+    const s = await stat(filePath);
+    if (!s.isFile()) return null;
+    const xml = await readFile(filePath, "utf8");
+    const coords = parseGpxCoords(xml);
+    if (coords.length < 2) return null;
+    return { coords, publicUrl: `/uploads/routes/${rideId}.gpx` };
+  } catch {
+    return null;
+  }
+}
+
+function slugify(s: string): string {
+  return (
+    s
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 64) || "ride"
+  );
+}
 
 export default async function RideDetailPage({ params }: { params: Params }) {
   const { id } = await params;
@@ -23,11 +65,14 @@ export default async function RideDetailPage({ params }: { params: Params }) {
 
   if (!ride) notFound();
 
-  const [rideType] = await db
-    .select()
-    .from(schema.rideTypes)
-    .where(eq(schema.rideTypes.code, ride.paceGroup))
-    .limit(1);
+  const [[rideType], gpx] = await Promise.all([
+    db
+      .select()
+      .from(schema.rideTypes)
+      .where(eq(schema.rideTypes.code, ride.paceGroup))
+      .limit(1),
+    loadGpxRoute(ride.id),
+  ]);
 
   const isManager = canManageRides(user.role);
 
@@ -152,15 +197,28 @@ export default async function RideDetailPage({ params }: { params: Params }) {
           </p>
         )}
 
-        {ride.routeUrl && (
-          <a
-            href={ride.routeUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-coral-700 hover:text-coral-800 underline underline-offset-4"
-          >
-            Route ↗
-          </a>
+        {(ride.routeUrl || gpx) && (
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium">
+            {ride.routeUrl && (
+              <a
+                href={ride.routeUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 text-coral-700 hover:text-coral-800 underline underline-offset-4"
+              >
+                Route ↗
+              </a>
+            )}
+            {gpx && (
+              <a
+                href={gpx.publicUrl}
+                download={`${slugify(ride.title)}.gpx`}
+                className="inline-flex items-center gap-2 text-coral-700 hover:text-coral-800 underline underline-offset-4"
+              >
+                Download GPX ↓
+              </a>
+            )}
+          </div>
         )}
 
         {ride.startPointLat && ride.startPointLng && (
@@ -168,6 +226,7 @@ export default async function RideDetailPage({ params }: { params: Params }) {
             <RideDetailMap
               lat={Number(ride.startPointLat)}
               lng={Number(ride.startPointLng)}
+              routeCoords={gpx?.coords}
             />
           </div>
         )}

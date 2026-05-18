@@ -15,6 +15,22 @@ const MapPicker = dynamic(
   },
 );
 
-export function RideDetailMap({ lat, lng }: { lat: number; lng: number }) {
-  return <MapPicker lat={lat} lng={lng} readOnly height={220} />;
+export function RideDetailMap({
+  lat,
+  lng,
+  routeCoords,
+}: {
+  lat: number;
+  lng: number;
+  routeCoords?: [number, number][];
+}) {
+  return (
+    <MapPicker
+      lat={lat}
+      lng={lng}
+      readOnly
+      height={220}
+      routeCoords={routeCoords}
+    />
+  );
 }
