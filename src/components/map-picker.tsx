@@ -81,7 +81,8 @@ export function MapPicker({
       center={center}
       zoom={zoom}
       style={{ height, width: "100%", borderRadius: 16, zIndex: 0 }}
-      scrollWheelZoom={false}
+      scrollWheelZoom
+      touchZoom
       attributionControl
     >
       <TileLayer
@@ -92,7 +93,7 @@ export function MapPicker({
       {hasRoute && (
         <Polyline
           positions={routeCoords}
-          pathOptions={{ color: "#ec6e8a", weight: 4, opacity: 0.85 }}
+          pathOptions={{ color: "#1e40af", weight: 4, opacity: 0.85 }}
         />
       )}
       {hasPin && <Marker position={[lat, lng]} icon={PIN} />}
