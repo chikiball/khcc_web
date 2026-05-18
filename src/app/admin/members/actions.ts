@@ -98,3 +98,22 @@ export async function rejectUser(userId: string, formData: FormData) {
 
   revalidatePath("/admin/members");
 }
+
+export async function setUserRole(userId: string, role: string) {
+  const admin = await requireAdmin();
+
+  const validRoles = ["member", "leader", "organiser", "admin"] as const;
+  if (!validRoles.includes(role as (typeof validRoles)[number])) {
+    throw new Error("Invalid role.");
+  }
+  if (userId === admin.id && role !== "admin") {
+    throw new Error("You cannot change your own role. Ask another admin.");
+  }
+
+  await db
+    .update(schema.users)
+    .set({ role: role as "member" | "leader" | "organiser" | "admin", updatedAt: new Date() })
+    .where(eq(schema.users.id, userId));
+
+  revalidatePath("/admin/members");
+}

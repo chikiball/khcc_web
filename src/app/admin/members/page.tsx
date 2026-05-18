@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db, schema } from "@/db";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { ApproveButton, RejectButton } from "@/components/member-action-buttons";
+import { RoleSelect } from "@/components/role-select";
 import { desc, eq } from "drizzle-orm";
 
 export const metadata = { title: "Members" };
@@ -95,9 +96,6 @@ export default async function AdminMembersPage({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-display font-semibold text-ink">{m.name ?? "(unnamed)"}</p>
-                  <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-cream-200 text-ink-soft">
-                    {m.role}
-                  </span>
                   <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-coral-200 text-coral-800">
                     Pace {m.paceGroup}
                   </span>
@@ -109,6 +107,11 @@ export default async function AdminMembersPage({
                   <p className="text-xs text-ink-soft mt-2 italic">{m.rejectedReason}</p>
                 )}
               </div>
+
+              {/* Role selector — visible on all tabs so admin can pre-assign
+                  role before approval or demote an existing member */}
+              <RoleSelect userId={m.id} userName={m.name ?? "this rider"} currentRole={m.role} />
+
               {tab === "pending" && (
                 <div className="flex gap-2 shrink-0 self-center">
                   <ApproveButton userId={m.id} />
