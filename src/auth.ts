@@ -17,6 +17,7 @@ declare module "next-auth" {
       role: Role;
       status: Status;
       onboarded: boolean;
+      termsAccepted: boolean;
     } & DefaultSession["user"];
   }
 }
@@ -26,6 +27,7 @@ type AppToken = {
   role?: Role;
   status?: Status;
   onboarded?: boolean;
+  termsAccepted?: boolean;
 };
 
 // Two providers, identical admin-approval flow:
@@ -130,6 +132,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           trigger === "update" ||
           !t.role ||
           !t.onboarded ||
+          !t.termsAccepted ||
           t.status !== "approved")
       ) {
         const [row] = await db
@@ -137,6 +140,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             role: users.role,
             status: users.status,
             onboardedAt: users.onboardedAt,
+            acceptedTermsAt: users.acceptedTermsAt,
           })
           .from(users)
           .where(eq(users.id, t.id))
@@ -145,6 +149,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           t.role = row.role;
           t.status = row.status;
           t.onboarded = row.onboardedAt !== null;
+          t.termsAccepted = row.acceptedTermsAt !== null;
         }
       }
       return t;
@@ -155,6 +160,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (t.role) session.user.role = t.role;
       session.user.status = t.status ?? "pending";
       session.user.onboarded = t.onboarded ?? false;
+      session.user.termsAccepted = t.termsAccepted ?? false;
       return session;
     },
   },

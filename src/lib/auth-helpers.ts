@@ -20,10 +20,13 @@ export async function requireUser() {
 /**
  * Require an approved user (the bar for ALL member features). Pending
  * and rejected users are sent to /pending where they see status messaging.
- * Onboarding-incomplete users are sent through onboarding first.
+ * Onboarding-incomplete users are sent through onboarding first. Brand
+ * new users who haven't accepted the member terms yet are sent to /terms
+ * before anything else — they can't reach onboarding without consenting.
  */
 export async function requireApproved() {
   const user = await requireUser();
+  if (!user.termsAccepted) redirect("/terms");
   if (!user.onboarded) redirect("/onboarding");
   if (user.status !== "approved") redirect("/pending");
   return user;

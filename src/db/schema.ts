@@ -64,6 +64,7 @@ export const users = pgTable("users", {
   stravaHandle: text("strava_handle"),
   bio: text("bio"),
   hideFromDirectory: boolean("hide_from_directory").notNull().default(false),
+  acceptedTermsAt: timestamp("accepted_terms_at", { mode: "date" }),
   onboardedAt: timestamp("onboarded_at", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
