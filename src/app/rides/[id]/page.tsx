@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { canManageRides, requireApproved } from "@/lib/auth-helpers";
 import { parseGpxCoords } from "@/lib/gpx";
+import { getRideForecast, weatherIcon, WIND_THRESHOLD_KPH } from "@/lib/weather";
 import { RideDetailMap } from "@/components/ride-detail-map";
 import { RsvpButton } from "@/components/rsvp-button";
 import { PaceBadge } from "@/components/ride-card";
@@ -39,12 +40,15 @@ export default async function RideDetailPage({ params }: { params: Params }) {
 
   const isManager = canManageRides(user.role);
 
-  const [paceGroups, allRideTypes, gpx] = await Promise.all([
+  const [paceGroups, allRideTypes, gpx, forecast] = await Promise.all([
     db.select().from(schema.ridePaceGroups)
       .where(eq(schema.ridePaceGroups.rideId, id))
       .orderBy(asc(schema.ridePaceGroups.position)),
     db.select().from(schema.rideTypes),
     loadGpxRoute(ride.id),
+    ride.startPointLat && ride.startPointLng
+      ? getRideForecast(Number(ride.startPointLat), Number(ride.startPointLng), ride.startsAt)
+      : Promise.resolve(null),
   ]);
 
   const typeByCode = new Map(allRideTypes.map((t) => [t.code, t]));
@@ -111,6 +115,33 @@ export default async function RideDetailPage({ params }: { params: Params }) {
           <Stat label="m up" value={ride.elevationM} />
           <Stat label="riders" value={totalRiders} />
         </dl>
+
+        {forecast && (() => {
+          const fc = weatherIcon(forecast.weatherCode);
+          const windy = forecast.windKph >= WIND_THRESHOLD_KPH;
+          return (
+            <div className="mt-4 rounded-2xl bg-cream-100 ring-1 ring-maroon-200/60 px-4 py-3 text-sm">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="text-xl">{fc.icon}</span>
+                <span className="font-semibold text-ink">
+                  {fc.label} · {Math.round(forecast.temperatureC)}°
+                </span>
+                <span className={windy ? "text-flash-600 font-medium" : "text-ink-soft"}>
+                  🌬 {Math.round(forecast.windKph)} km/h
+                </span>
+                <span className="text-ink-soft">
+                  ☔ {forecast.precipChancePct}%
+                </span>
+                {forecast.sunriseLocal && (
+                  <span className="text-ink-soft">☀ {forecast.sunriseLocal}</span>
+                )}
+                {forecast.sunsetLocal && (
+                  <span className="text-ink-soft">🌙 {forecast.sunsetLocal}</span>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {ride.description && (
           <p className="mt-6 text-base text-ink leading-relaxed whitespace-pre-wrap">{ride.description}</p>

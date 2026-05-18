@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { colorClasses, type RideTypeOption } from "@/lib/ride-types";
+import { weatherIcon, WIND_THRESHOLD_KPH, type RideForecast } from "@/lib/weather";
 import type { RidePaceGroup } from "@/db/schema";
 
 type Ride = {
@@ -20,14 +21,18 @@ export function RideCard({
   ride,
   paces,
   previewUrl,
+  forecast,
 }: {
   ride: Ride;
   paces: PaceWithCount[];
   previewUrl?: string | null;
+  forecast?: RideForecast | null;
 }) {
   const start = new Date(ride.starts_at);
   const totalCount = paces.reduce((s, p) => s + p.count, 0);
   const activePaces = paces.filter((p) => p.paceGroup.status !== "cancelled");
+  const fc = forecast ? weatherIcon(forecast.weatherCode) : null;
+  const windy = forecast && forecast.windKph >= WIND_THRESHOLD_KPH;
 
   return (
     <article className="rounded-2xl bg-white ring-1 ring-maroon-200/60 overflow-hidden shadow-sm">
@@ -43,6 +48,19 @@ export function RideCard({
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wider text-coral-600">
               {formatDay(start)} · {formatTime(start)}
+              {fc && (
+                <span
+                  className="ml-2 text-ink-soft normal-case font-normal"
+                  title={fc.label}
+                >
+                  {fc.icon} {Math.round(forecast!.temperatureC)}°
+                  {windy && (
+                    <span className="ml-1.5 text-flash-600">
+                      🌬 {Math.round(forecast!.windKph)} km/h
+                    </span>
+                  )}
+                </span>
+              )}
             </p>
             <h3 className="mt-1 font-display text-xl font-semibold text-ink truncate">
               {ride.title}

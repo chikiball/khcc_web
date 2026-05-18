@@ -5,6 +5,7 @@ import { db, schema } from "@/db";
 import { canManageRides, requireApproved } from "@/lib/auth-helpers";
 import { RideCard } from "@/components/ride-card";
 import { signOut } from "@/app/auth/actions";
+import { getRideForecast } from "@/lib/weather";
 import { and, asc, eq, gte, inArray, lte, ne } from "drizzle-orm";
 import type { RideTypeOption } from "@/lib/ride-types";
 
@@ -28,6 +29,7 @@ export default async function RidesPage() {
     db.select({
       id: schema.rides.id, title: schema.rides.title,
       starts_at: schema.rides.startsAt, start_point_name: schema.rides.startPointName,
+      start_point_lat: schema.rides.startPointLat, start_point_lng: schema.rides.startPointLng,
       status: schema.rides.status,
     }).from(schema.rides)
       .where(and(gte(schema.rides.startsAt, now), lte(schema.rides.startsAt, horizon), ne(schema.rides.status, "cancelled")))
@@ -63,6 +65,21 @@ export default async function RidesPage() {
 
   const previewEntries = await Promise.all(rides.map(async (r) => [r.id, await findPreview(r.id)] as const));
   const previewByRide = new Map(previewEntries);
+
+  // Forecast per ride (parallel; null when ride has no lat/lng or fetch fails)
+  const forecastEntries = await Promise.all(
+    rides.map(async (r) => {
+      if (!r.start_point_lat || !r.start_point_lng) return [r.id, null] as const;
+      const fc = await getRideForecast(
+        Number(r.start_point_lat),
+        Number(r.start_point_lng),
+        r.starts_at,
+      );
+      return [r.id, fc] as const;
+    }),
+  );
+  const forecastByRide = new Map(forecastEntries);
+
   const firstName = (user.name ?? "rider").split(" ")[0];
 
   return (
@@ -102,6 +119,7 @@ export default async function RidesPage() {
               ride={{ id: ride.id, title: ride.title, starts_at: ride.starts_at.toISOString(), start_point_name: ride.start_point_name, status: ride.status }}
               paces={ridePageGroups.map((pg) => ({ paceGroup: pg, rideType: typeByCode.get(pg.paceCode), count: countByPace.get(pg.id) ?? 0 }))}
               previewUrl={previewByRide.get(ride.id) ?? null}
+              forecast={forecastByRide.get(ride.id) ?? null}
             />
           );
         })}
