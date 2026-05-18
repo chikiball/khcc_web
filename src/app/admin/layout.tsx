@@ -11,36 +11,58 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const user = await requireApproved();
   if (!canManageRides(user.role)) notFound();
 
+  const isAdmin = user.role === "admin";
+  const links: Array<{ href: string; label: string }> = [
+    { href: "/admin/rides", label: "Rides" },
+    ...(isAdmin
+      ? [
+          { href: "/admin/members", label: "Members" },
+          { href: "/admin/types", label: "Types" },
+          { href: "/admin/content", label: "Content" },
+          { href: "/admin/gallery", label: "Gallery" },
+        ]
+      : []),
+    { href: "/rides", label: "← Back" },
+  ];
+
   return (
     <div className="min-h-dvh bg-paper text-ink">
       <header className="px-5 pt-6 pb-4 flex items-center justify-between border-b border-maroon-200/40">
         <Link href="/admin/rides" className="font-display text-2xl font-bold tracking-tight">
           KHCC <span className="text-coral-600">·</span> admin
         </Link>
-        <nav className="flex items-center gap-4 text-sm">
-          <Link href="/admin/rides" className="text-ink-soft hover:text-ink">
-            Rides
-          </Link>
-          {user.role === "admin" && (
-            <>
-              <Link href="/admin/members" className="text-ink-soft hover:text-ink">
-                Members
-              </Link>
-              <Link href="/admin/types" className="text-ink-soft hover:text-ink">
-                Types
-              </Link>
-              <Link href="/admin/content" className="text-ink-soft hover:text-ink">
-                Content
-              </Link>
-              <Link href="/admin/gallery" className="text-ink-soft hover:text-ink">
-                Gallery
-              </Link>
-            </>
-          )}
-          <Link href="/rides" className="text-ink-soft hover:text-ink">
-            ← Back
-          </Link>
+
+        {/* Inline nav on tablet/desktop */}
+        <nav className="hidden sm:flex items-center gap-4 text-sm">
+          {links.map((l) => (
+            <Link key={l.href} href={l.href} className="text-ink-soft hover:text-ink">
+              {l.label}
+            </Link>
+          ))}
         </nav>
+
+        {/* Hamburger dropdown on mobile — uses native <details> so no JS */}
+        <details className="sm:hidden relative admin-menu">
+          <summary
+            aria-label="Admin menu"
+            className="list-none [&::-webkit-details-marker]:hidden cursor-pointer rounded-xl ring-1 ring-maroon-200 bg-white px-3 py-2 text-ink-soft hover:text-ink select-none"
+          >
+            <span className="block w-5 h-0.5 bg-current mb-1" />
+            <span className="block w-5 h-0.5 bg-current mb-1" />
+            <span className="block w-5 h-0.5 bg-current" />
+          </summary>
+          <nav className="absolute right-0 top-full mt-2 z-20 min-w-[10rem] rounded-2xl bg-white ring-1 ring-maroon-200 shadow-lg p-1 text-sm">
+            {links.map((l) => (
+              <Link
+                key={l.href}
+                href={l.href}
+                className="block px-3 py-2 rounded-xl text-ink hover:bg-cream-100"
+              >
+                {l.label}
+              </Link>
+            ))}
+          </nav>
+        </details>
       </header>
       {children}
     </div>
