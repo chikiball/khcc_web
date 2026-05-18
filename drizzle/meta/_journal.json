@@ -43,6 +43,13 @@
       "when": 1779030294177,
       "tag": "0005_pink_stone_men",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1779084008726,
+      "tag": "0006_furry_champions",
+      "breakpoints": true
     }
   ]
 }

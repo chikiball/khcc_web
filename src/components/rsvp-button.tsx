@@ -5,18 +5,22 @@ import { toggleRsvp } from "@/app/rides/actions";
 
 export function RsvpButton({
   rideId,
-  isIn,
+  paceGroupId,
+  isInThisPace,
+  isInAnyPace,
   size = "lg",
 }: {
   rideId: string;
-  isIn: boolean;
+  paceGroupId: string;
+  isInThisPace: boolean;
+  isInAnyPace: boolean;
   size?: "sm" | "lg";
 }) {
   const [pending, startTransition] = useTransition();
 
   const handleClick = () => {
     startTransition(async () => {
-      await toggleRsvp(rideId, isIn);
+      await toggleRsvp(rideId, paceGroupId, isInThisPace);
     });
   };
 
@@ -24,9 +28,22 @@ export function RsvpButton({
     "inline-flex items-center justify-center font-semibold rounded-2xl active:scale-[0.97] transition-all disabled:opacity-50 shadow-sm";
   const sizing =
     size === "lg" ? "px-6 py-3 text-base min-w-[8rem]" : "px-4 py-2 text-sm min-w-[5rem]";
-  const variant = isIn
-    ? "bg-cream-100 text-ink ring-1 ring-maroon-300 hover:bg-cream-200"
-    : "bg-coral-500 hover:bg-coral-600 text-cream-50";
+
+  let label: string;
+  let variant: string;
+  if (pending) {
+    label = "…";
+    variant = "bg-cream-100 text-ink-soft ring-1 ring-maroon-300";
+  } else if (isInThisPace) {
+    label = "✓ In";
+    variant = "bg-cream-100 text-ink ring-1 ring-maroon-300 hover:bg-cream-200";
+  } else if (isInAnyPace) {
+    label = "Switch";
+    variant = "bg-coral-100 text-coral-800 ring-1 ring-coral-300 hover:bg-coral-200";
+  } else {
+    label = "I'm in";
+    variant = "bg-coral-500 hover:bg-coral-600 text-cream-50";
+  }
 
   return (
     <button
@@ -34,9 +51,9 @@ export function RsvpButton({
       onClick={handleClick}
       disabled={pending}
       className={`${base} ${sizing} ${variant}`}
-      aria-pressed={isIn}
+      aria-pressed={isInThisPace}
     >
-      {pending ? "…" : isIn ? "✓ In" : "I'm in"}
+      {label}
     </button>
   );
 }

@@ -70,12 +70,11 @@ export async function updateRideType(code: string, formData: FormData) {
 export async function deleteRideType(code: string) {
   await requireAdmin();
 
-  // Refuse if any rides or users still reference this type — admin must
-  // first migrate them. Soft-disable via the active flag is the usual path.
-  const [rideUse] = await db
-    .select({ id: schema.rides.id })
-    .from(schema.rides)
-    .where(eq(schema.rides.paceGroup, code))
+  // Refuse if any pace groups or users still reference this type.
+  const [paceUse] = await db
+    .select({ id: schema.ridePaceGroups.id })
+    .from(schema.ridePaceGroups)
+    .where(eq(schema.ridePaceGroups.paceCode, code))
     .limit(1);
   const [userUse] = await db
     .select({ id: schema.users.id })
@@ -83,9 +82,9 @@ export async function deleteRideType(code: string) {
     .where(eq(schema.users.paceGroup, code))
     .limit(1);
 
-  if (rideUse || userUse) {
+  if (paceUse || userUse) {
     throw new Error(
-      "Cannot delete — rides or users still use this type. Mark it inactive instead.",
+      "Cannot delete — ride pace groups or users still use this type. Mark it inactive instead.",
     );
   }
 

@@ -6,20 +6,11 @@ import {
   numeric,
   primaryKey,
   index,
+  uniqueIndex,
   boolean,
   pgEnum,
 } from "drizzle-orm/pg-core";
 import type { AdapterAccountType } from "next-auth/adapters";
-
-// ===========================================================================
-// Auth.js core tables (Drizzle adapter contract)
-// https://authjs.dev/getting-started/adapters/drizzle
-//
-// We extend `users` with our domain fields (role, paceGroup, bike, etc.)
-// rather than maintaining a separate `profiles` table. JWT session strategy
-// is used, so we don't need a `sessions` table — Auth.js still uses `users`
-// and `accounts` to link the Google account.
-// ===========================================================================
 
 export const roleEnum = pgEnum("role", ["member", "leader", "organiser", "admin"]);
 export const userStatusEnum = pgEnum("user_status", ["pending", "approved", "rejected"]);
@@ -32,12 +23,8 @@ export const rideStatusEnum = pgEnum("ride_status", [
 export const rsvpStatusEnum = pgEnum("rsvp_status", ["in", "waitlist", "cancelled"]);
 
 // ===========================================================================
-// Ride types — admin-managed pace groups
+// Ride types — admin-managed pace catalogue
 // ===========================================================================
-// Replaces the old hardcoded ('A','B','C') enum. Code is the FK target on
-// rides.pace_group and users.pace_group. Adding a new pace group is now an
-// INSERT, not a migration. The `color` field references one of the preset
-// keys in src/lib/ride-types.ts.
 
 export const rideTypes = pgTable("ride_types", {
   code: text("code").primaryKey(),
@@ -51,20 +38,24 @@ export const rideTypes = pgTable("ride_types", {
 
 export type RideType = typeof rideTypes.$inferSelect;
 
+// ===========================================================================
+// Auth.js core tables
+// ===========================================================================
+
 export const users = pgTable("users", {
-  // Auth.js fields
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text("name"),
   email: text("email").unique(),
   emailVerified: timestamp("emailVerified", { mode: "date" }),
   image: text("image"),
 
-  // KHCC profile fields
   role: roleEnum("role").notNull().default("member"),
   status: userStatusEnum("status").notNull().default("pending"),
   approvedAt: timestamp("approved_at", { mode: "date" }),
   approvedBy: text("approved_by"),
   rejectedReason: text("rejected_reason"),
+  // users.pace_group is the rider's PREFERENCE, used to pre-select the
+  // matching pace card on each ride detail page.
   paceGroup: text("pace_group")
     .notNull()
     .default("B")
@@ -108,12 +99,6 @@ export const verificationTokens = pgTable(
   (vt) => [primaryKey({ columns: [vt.identifier, vt.token] })],
 );
 
-// ===========================================================================
-// Private user data — emergency contact.
-// Separated so any query that doesn't explicitly join cannot leak it.
-// Authorisation is enforced in app code (no RLS without Supabase auth context).
-// ===========================================================================
-
 export const usersPrivate = pgTable("users_private", {
   userId: text("user_id")
     .primaryKey()
@@ -124,8 +109,11 @@ export const usersPrivate = pgTable("users_private", {
 });
 
 // ===========================================================================
-// Rides
+// Rides — shared event header
 // ===========================================================================
+// Per-pace details (leader, cap, distance override, etc.) live in
+// ride_pace_groups below. A ride has at least one active pace group to be
+// considered "live"; it is cancelled at ride level when the whole event is off.
 
 export const rides = pgTable(
   "rides",
@@ -136,16 +124,12 @@ export const rides = pgTable(
     startPointName: text("start_point_name").notNull(),
     startPointLat: numeric("start_point_lat", { precision: 10, scale: 6 }),
     startPointLng: numeric("start_point_lng", { precision: 10, scale: 6 }),
+    // Default distance + elevation shown when no per-pace override is set.
     distanceKm: numeric("distance_km", { precision: 6, scale: 2 }),
     elevationM: integer("elevation_m"),
-    paceGroup: text("pace_group")
-      .notNull()
-      .references(() => rideTypes.code, { onDelete: "no action" }),
     routeUrl: text("route_url"),
     description: text("description"),
-    leaderId: text("leader_id").references(() => users.id, { onDelete: "set null" }),
     status: rideStatusEnum("status").notNull().default("scheduled"),
-    cap: integer("cap"),
     cancelledAt: timestamp("cancelled_at", { mode: "date" }),
     cancelledBy: text("cancelled_by").references(() => users.id, { onDelete: "set null" }),
     cancelledReason: text("cancelled_reason"),
@@ -156,7 +140,47 @@ export const rides = pgTable(
 );
 
 // ===========================================================================
-// RSVPs
+// Ride pace groups — per-pace details for a ride
+// ===========================================================================
+// One ride can offer multiple pace groups (A + B + C all at 5:45 AM from the
+// same start). Each has its own leader, cap, and optional distance / elevation
+// overrides. `status` is per-pace: admin can cancel just the B group while
+// keeping A and C running.
+
+export const ridePaceGroups = pgTable(
+  "ride_pace_groups",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    rideId: text("ride_id")
+      .notNull()
+      .references(() => rides.id, { onDelete: "cascade" }),
+    paceCode: text("pace_code")
+      .notNull()
+      .references(() => rideTypes.code, { onDelete: "no action" }),
+    leaderId: text("leader_id").references(() => users.id, { onDelete: "set null" }),
+    distanceKm: numeric("distance_km", { precision: 6, scale: 2 }),
+    elevationM: integer("elevation_m"),
+    cap: integer("cap"),
+    notes: text("notes"),
+    // 'scheduled' | 'cancelled' — only these two states at pace level
+    status: text("status").notNull().default("scheduled"),
+    cancelledAt: timestamp("cancelled_at", { mode: "date" }),
+    cancelledBy: text("cancelled_by").references(() => users.id, { onDelete: "set null" }),
+    cancelledReason: text("cancelled_reason"),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("ride_pace_groups_ride_id_idx").on(t.rideId),
+    uniqueIndex("ride_pace_groups_ride_pace_idx").on(t.rideId, t.paceCode),
+  ],
+);
+
+export type RidePaceGroup = typeof ridePaceGroups.$inferSelect;
+
+// ===========================================================================
+// RSVPs — one per user per ride (one pace choice)
 // ===========================================================================
 
 export const rideRsvps = pgTable(
@@ -168,6 +192,9 @@ export const rideRsvps = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    paceGroupId: text("pace_group_id")
+      .notNull()
+      .references(() => ridePaceGroups.id, { onDelete: "cascade" }),
     status: rsvpStatusEnum("status").notNull().default("in"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
@@ -175,19 +202,13 @@ export const rideRsvps = pgTable(
   (t) => [
     primaryKey({ columns: [t.rideId, t.userId] }),
     index("ride_rsvps_user_id_idx").on(t.userId),
+    index("ride_rsvps_pace_group_id_idx").on(t.paceGroupId),
   ],
 );
 
 export type User = typeof users.$inferSelect;
 export type Ride = typeof rides.$inferSelect;
 export type RideRsvp = typeof rideRsvps.$inferSelect;
-
-// ===========================================================================
-// Content blocks — admin-editable copy on the public landing page
-// ===========================================================================
-// Single key-value table. Each row is a section ("about", "achievements").
-// Body is plain text; rendered with whitespace-pre-wrap so blank lines
-// become paragraph breaks. Keep it simple — leaders don't need markdown.
 
 export const contentBlocks = pgTable("content_blocks", {
   key: text("key").primaryKey(),
@@ -198,14 +219,6 @@ export const contentBlocks = pgTable("content_blocks", {
 });
 
 export type ContentBlock = typeof contentBlocks.$inferSelect;
-
-// ===========================================================================
-// Gallery photos — admin-managed showcase strip on the landing page
-// ===========================================================================
-// Each row points at an image URL — either a static file under /gallery/*
-// (the seeded ones) or an admin-uploaded file under /uploads/gallery/*.
-// Order is created_at DESC so admin-uploaded photos surface above the seeded
-// defaults; seed timestamps are spaced out so the seeded order is stable.
 
 export const galleryPhotos = pgTable("gallery_photos", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),

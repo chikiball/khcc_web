@@ -27,14 +27,14 @@ async function main() {
     return d;
   };
 
-  await db.insert(schema.rides).values([
+  // Insert ride shells (no pace_group, leader_id or cap on rides any more)
+  const inserted = await db.insert(schema.rides).values([
     {
       title: "Saturday Bunch — East Coast",
       startsAt: inDays(2, 5),
       startPointName: "Marina Barrage",
       distanceKm: "65",
       elevationM: 180,
-      paceGroup: "B",
       routeUrl: "https://www.strava.com/routes/example",
       description: "Steady B-pace loop. Coffee at the usual spot after.",
     },
@@ -44,7 +44,6 @@ async function main() {
       startPointName: "Sentul Circuit",
       distanceKm: "80",
       elevationM: 1200,
-      paceGroup: "A",
       routeUrl: "https://www.strava.com/routes/example",
       description: "4× hill repeats. Bring the climbing legs.",
     },
@@ -54,12 +53,23 @@ async function main() {
       startPointName: "Knock House",
       distanceKm: "40",
       elevationM: 90,
-      paceGroup: "C",
       description: "No-drop. New riders welcome.",
     },
+  ]).returning({ id: schema.rides.id, title: schema.rides.title });
+
+  // Add pace groups for each ride
+  await db.insert(schema.ridePaceGroups).values([
+    // Saturday Bunch: A + B + C
+    { rideId: inserted[0].id, paceCode: "A", notes: "Fast loop, extra hill detour.", position: 0 },
+    { rideId: inserted[0].id, paceCode: "B", position: 1 },
+    { rideId: inserted[0].id, paceCode: "C", notes: "No-drop, turn back at 30km.", position: 2 },
+    // Hambalang: A only
+    { rideId: inserted[1].id, paceCode: "A", position: 0 },
+    // Sunday roll: C only
+    { rideId: inserted[2].id, paceCode: "C", position: 0 },
   ]);
 
-  console.log("✓ seeded 3 rides");
+  console.log("✓ seeded 3 rides with pace groups");
   process.exit(0);
 }
 

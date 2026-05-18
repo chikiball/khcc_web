@@ -1,46 +1,43 @@
 import Link from "next/link";
-import { RsvpButton } from "@/components/rsvp-button";
 import { colorClasses, type RideTypeOption } from "@/lib/ride-types";
+import type { RidePaceGroup } from "@/db/schema";
 
 type Ride = {
   id: string;
   title: string;
   starts_at: string;
   start_point_name: string;
-  distance_km: number | null;
-  elevation_m: number | null;
-  pace_group: string;
   status: string;
+};
+
+type PaceWithCount = {
+  paceGroup: RidePaceGroup;
+  rideType?: RideTypeOption;
+  count: number;
 };
 
 export function RideCard({
   ride,
-  rsvpCount,
-  isIn,
-  rideType,
+  paces,
   previewUrl,
 }: {
   ride: Ride;
-  rsvpCount: number;
-  isIn: boolean;
-  rideType?: RideTypeOption;
+  paces: PaceWithCount[];
   previewUrl?: string | null;
 }) {
   const start = new Date(ride.starts_at);
+  const totalCount = paces.reduce((s, p) => s + p.count, 0);
+  const activePaces = paces.filter((p) => p.paceGroup.status !== "cancelled");
 
   return (
     <article className="rounded-2xl bg-white ring-1 ring-maroon-200/60 overflow-hidden shadow-sm">
       {previewUrl && (
         <Link href={`/rides/${ride.id}`} className="block relative aspect-[2/1] bg-cream-100">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={previewUrl}
-            alt=""
-            loading="lazy"
-            className="absolute inset-0 size-full object-cover"
-          />
+          <img src={previewUrl} alt="" loading="lazy" className="absolute inset-0 size-full object-cover" />
         </Link>
       )}
+
       <Link href={`/rides/${ride.id}`} className="block p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -50,55 +47,37 @@ export function RideCard({
             <h3 className="mt-1 font-display text-xl font-semibold text-ink truncate">
               {ride.title}
             </h3>
-            <p className="text-sm text-ink-soft mt-0.5 truncate">
-              {ride.start_point_name}
-            </p>
+            <p className="text-sm text-ink-soft mt-0.5 truncate">{ride.start_point_name}</p>
           </div>
-          <div className="flex flex-col items-end gap-1 shrink-0">
-            <PaceBadge code={ride.pace_group} rideType={rideType} />
-            {rideType && (
-              <span className="text-[10px] uppercase tracking-wider text-ink-soft text-right max-w-[8rem] truncate">
-                {rideType.name}
-              </span>
+
+          {/* Pace strip with per-pace RSVP counts */}
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
+            {activePaces.map(({ paceGroup, rideType, count }) => {
+              const tone = colorClasses(rideType?.color ?? "coral");
+              return (
+                <div key={paceGroup.id} className="flex items-center gap-1.5">
+                  <span className="text-xs text-ink-soft tabular-nums">{count}</span>
+                  <span
+                    className={`hex-clip inline-flex items-center justify-center w-10 h-10 font-display font-bold text-base ring-1 ${tone.bg} ${tone.text} ${tone.ring}`}
+                    aria-label={`${paceGroup.paceCode}${rideType ? ` ${rideType.name}` : ""}`}
+                    title={rideType?.name}
+                  >
+                    {paceGroup.paceCode}
+                  </span>
+                </div>
+              );
+            })}
+            {paces.length > 0 && (
+              <span className="text-[10px] text-ink-soft/70 text-right">{totalCount} total</span>
             )}
           </div>
         </div>
-
-        <div className="mt-4 flex items-center gap-4 text-sm text-ink-soft">
-          {ride.distance_km != null && (
-            <span>
-              <span className="font-semibold text-ink">{ride.distance_km}</span> km
-            </span>
-          )}
-          {ride.elevation_m != null && (
-            <span>
-              <span className="font-semibold text-ink">{ride.elevation_m}</span> m
-            </span>
-          )}
-          <span className="ml-auto inline-flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-coral-500" aria-hidden="true" />
-            <span className="font-medium">{rsvpCount}</span> in
-          </span>
-        </div>
       </Link>
-
-      <div className="px-5 pb-5 -mt-1 flex items-center justify-end">
-        <RsvpButton rideId={ride.id} isIn={isIn} size="sm" />
-      </div>
     </article>
   );
 }
 
-export function PaceBadge({
-  code,
-  rideType,
-}: {
-  code: string;
-  rideType?: RideTypeOption;
-}) {
-  // Letter is always shown alongside any colour cue (NFR-6 — pace group
-  // never colour-only). Falls back to coral if the type's color preset
-  // is missing or the type isn't passed in.
+export function PaceBadge({ code, rideType }: { code: string; rideType?: RideTypeOption }) {
   const tone = colorClasses(rideType?.color ?? "coral");
   return (
     <span
@@ -119,15 +98,9 @@ function formatDay(d: Date) {
   if (sameDay(d, tomorrow)) return "Tomorrow";
   return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
 }
-
 function formatTime(d: Date) {
   return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
-
 function sameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }

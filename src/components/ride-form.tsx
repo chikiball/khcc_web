@@ -1,5 +1,9 @@
-import { colorClasses, type RideTypeOption } from "@/lib/ride-types";
 import { LocationFields } from "@/components/location-fields";
+import { PaceGroupsEditor } from "@/components/pace-groups-editor";
+import type { RideTypeOption } from "@/lib/ride-types";
+import type { PaceGroupInput } from "@/app/admin/rides/actions";
+
+export type LeaderOption = { id: string; name: string | null };
 
 type Ride = {
   title?: string | null;
@@ -9,21 +13,14 @@ type Ride = {
   start_point_lng?: string | null;
   distance_km?: string | null;
   elevation_m?: number | null;
-  pace_group?: string | null;
   route_url?: string | null;
   description?: string | null;
-  cap?: number | null;
-  leader_id?: string | null;
-};
-
-export type LeaderOption = {
-  id: string;
-  name: string | null;
 };
 
 export function RideForm({
   action,
   defaultValues,
+  defaultPaceGroups,
   leaders,
   rideTypes,
   submitLabel,
@@ -31,14 +28,13 @@ export function RideForm({
 }: {
   action: (formData: FormData) => Promise<void>;
   defaultValues?: Ride;
+  defaultPaceGroups?: PaceGroupInput[];
   leaders: LeaderOption[];
   rideTypes: RideTypeOption[];
   submitLabel: string;
   readOnly?: boolean;
 }) {
   const v = defaultValues ?? {};
-  const activeTypes = rideTypes.filter((t) => t.active || v.pace_group === t.code);
-  const defaultCode = v.pace_group ?? activeTypes[0]?.code ?? "";
 
   return (
     <form action={action} encType="multipart/form-data" className="mt-6 space-y-5">
@@ -75,42 +71,10 @@ export function RideForm({
         readOnly={readOnly}
       />
 
-      <fieldset disabled={readOnly}>
-        <legend className="text-sm font-medium text-ink">Pace group</legend>
-        <p className="text-xs text-ink-soft mt-0.5 mb-2">
-          Manage these in <span className="font-medium">Admin → Types</span>.
-        </p>
-        <div className="grid grid-cols-3 gap-2">
-          {activeTypes.map((t) => {
-            const tone = colorClasses(t.color);
-            return (
-              <label
-                key={t.code}
-                className={`relative flex flex-col items-center justify-center rounded-2xl ring-1 ring-maroon-200 bg-white py-3 px-2 cursor-pointer has-[:checked]:${tone.bg.replace("/15", "/30")} has-[:checked]:${tone.text} has-[:checked]:${tone.ring} has-[:disabled]:opacity-50 transition-colors`}
-                title={t.name}
-              >
-                <input
-                  type="radio"
-                  name="pace_group"
-                  value={t.code}
-                  defaultChecked={defaultCode === t.code}
-                  required
-                  disabled={readOnly}
-                  className="sr-only"
-                />
-                <span className="font-display font-bold text-xl">{t.code}</span>
-                <span className="text-[10px] mt-0.5 text-ink-soft truncate max-w-full">
-                  {t.name}
-                </span>
-              </label>
-            );
-          })}
-        </div>
-      </fieldset>
-
+      {/* Ride-level defaults — individual paces can override these */}
       <div className="grid grid-cols-2 gap-3">
         <Field
-          label="Distance (km)"
+          label="Distance km (default)"
           name="distance_km"
           type="number"
           step="0.1"
@@ -119,7 +83,7 @@ export function RideForm({
           readOnly={readOnly}
         />
         <Field
-          label="Elevation (m)"
+          label="Elevation m (default)"
           name="elevation_m"
           type="number"
           step="1"
@@ -140,9 +104,7 @@ export function RideForm({
 
       {!readOnly && (
         <label className="block">
-          <span className="block text-sm font-medium text-ink mb-1">
-            GPX file (optional)
-          </span>
+          <span className="block text-sm font-medium text-ink mb-1">GPX file (optional)</span>
           <input
             type="file"
             name="gpx"
@@ -150,8 +112,7 @@ export function RideForm({
             className="block w-full text-sm text-ink-soft file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-cream-100 file:text-ink hover:file:bg-cream-200 file:cursor-pointer"
           />
           <p className="text-xs text-ink-soft mt-1">
-            Replaces distance and elevation with values from the file. Strava
-            → Export GPX, Komoot → Download GPX, Garmin Connect, etc.
+            Replaces distance and elevation with values from the file. Strava → Export GPX.
           </p>
         </label>
       )}
@@ -168,33 +129,20 @@ export function RideForm({
         />
       </label>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field
-          label="Cap"
-          name="cap"
-          type="number"
-          step="1"
-          defaultValue={v.cap ?? ""}
-          placeholder="Optional"
-          readOnly={readOnly}
+      {/* Multi-pace editor */}
+      {!readOnly ? (
+        <PaceGroupsEditor
+          defaultPaceGroups={defaultPaceGroups ?? []}
+          rideTypes={rideTypes}
+          leaders={leaders}
+          defaultDistanceKm={v.distance_km}
+          defaultElevationM={v.elevation_m}
         />
-        <label className="block">
-          <span className="block text-sm font-medium text-ink mb-1">Leader</span>
-          <select
-            name="leader_id"
-            defaultValue={v.leader_id ?? ""}
-            disabled={readOnly}
-            className="w-full rounded-xl bg-white ring-1 ring-maroon-200 focus:ring-2 focus:ring-coral-400 px-4 py-3 text-base outline-none transition-shadow disabled:opacity-70"
-          >
-            <option value="">Unassigned</option>
-            {leaders.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name ?? "(unnamed)"}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      ) : (
+        <p className="text-sm text-ink-soft italic">
+          Pace groups are shown on the ride detail page. Edit the ride to modify them.
+        </p>
+      )}
 
       {!readOnly && (
         <button
@@ -209,23 +157,10 @@ export function RideForm({
 }
 
 function Field({
-  label,
-  name,
-  required,
-  defaultValue,
-  placeholder,
-  type = "text",
-  step,
-  readOnly,
+  label, name, required, defaultValue, placeholder, type = "text", step, readOnly,
 }: {
-  label: string;
-  name: string;
-  required?: boolean;
-  defaultValue?: string | number;
-  placeholder?: string;
-  type?: string;
-  step?: string;
-  readOnly?: boolean;
+  label: string; name: string; required?: boolean; defaultValue?: string | number;
+  placeholder?: string; type?: string; step?: string; readOnly?: boolean;
 }) {
   return (
     <label className="block">
@@ -234,13 +169,8 @@ function Field({
         {required && <span className="text-coral-600 ml-0.5">*</span>}
       </span>
       <input
-        name={name}
-        type={type}
-        required={required}
-        defaultValue={defaultValue}
-        placeholder={placeholder}
-        step={step}
-        readOnly={readOnly}
+        name={name} type={type} required={required} defaultValue={defaultValue}
+        placeholder={placeholder} step={step} readOnly={readOnly}
         className="w-full rounded-xl bg-white ring-1 ring-maroon-200 focus:ring-2 focus:ring-coral-400 px-4 py-3 text-base outline-none transition-shadow read-only:opacity-70"
       />
     </label>
