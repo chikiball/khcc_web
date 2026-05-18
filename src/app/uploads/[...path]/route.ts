@@ -21,9 +21,10 @@ const MIME: Record<string, string> = {
   png: "image/png",
   webp: "image/webp",
   gif: "image/gif",
+  gpx: "application/gpx+xml",
 };
 
-const ALLOWED_SUBDIRS = new Set(["avatars", "gallery"]);
+const ALLOWED_SUBDIRS = new Set(["avatars", "gallery", "routes"]);
 
 export async function GET(
   _req: NextRequest,

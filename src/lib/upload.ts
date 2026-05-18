@@ -35,6 +35,28 @@ export async function processGalleryPhoto(file: File, photoId: string): Promise<
   });
 }
 
+/**
+ * Save an uploaded .gpx route file to /uploads/routes/<rideId>.gpx as-is
+ * (no resize, no transformation). Caller is expected to have parsed the
+ * file already to extract distance/elevation; we just persist the raw
+ * bytes for future use (map line rendering, member download).
+ */
+export async function saveRouteGpx(file: File, rideId: string): Promise<string> {
+  const name = file.name.toLowerCase();
+  if (!name.endsWith(".gpx")) {
+    throw new Error("Route file must end in .gpx.");
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error("GPX file is too big (5 MB max).");
+  }
+
+  const dir = path.join(PUBLIC_ROOT, "routes");
+  await mkdir(dir, { recursive: true });
+  const buffer = Buffer.from(await file.arrayBuffer());
+  await writeFile(path.join(dir, `${rideId}.gpx`), buffer);
+  return `/uploads/routes/${rideId}.gpx`;
+}
+
 async function processImage(
   file: File,
   opts: {

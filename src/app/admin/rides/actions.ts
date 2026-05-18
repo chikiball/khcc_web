@@ -2,6 +2,8 @@
 
 import { db, schema } from "@/db";
 import { requireRideManager } from "@/lib/auth-helpers";
+import { parseGpx } from "@/lib/gpx";
+import { saveRouteGpx } from "@/lib/upload";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
@@ -70,15 +72,46 @@ function toRow(input: RideInput) {
   };
 }
 
+/**
+ * If a .gpx file was uploaded, parse it and merge distance + elevation
+ * into the input — but only where the leader didn't type a value
+ * themselves. Leader-typed values always win over GPX-derived values.
+ * Returns the File so the caller can persist it once the ride id exists.
+ */
+async function maybeMergeGpx(
+  formData: FormData,
+  input: RideInput,
+): Promise<File | null> {
+  const file = formData.get("gpx");
+  if (!(file instanceof File) || file.size === 0) return null;
+  if (!file.name.toLowerCase().endsWith(".gpx")) {
+    throw new Error("Route file must end in .gpx.");
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error("GPX file is too big (5 MB max).");
+  }
+
+  const text = await file.text();
+  const parsed = parseGpx(text);
+
+  if (!input.distance_km) input.distance_km = String(parsed.distanceKm);
+  if (!input.elevation_m) input.elevation_m = String(parsed.elevationM);
+
+  return file;
+}
+
 export async function createRide(formData: FormData) {
   // Re-check role at action time — never trust the client.
   await requireRideManager();
   const input = parseRideInput(formData);
+  const gpxFile = await maybeMergeGpx(formData, input);
 
   const [created] = await db
     .insert(schema.rides)
     .values(toRow(input))
     .returning({ id: schema.rides.id });
+
+  if (gpxFile) await saveRouteGpx(gpxFile, created.id);
 
   revalidatePath("/rides");
   revalidatePath("/admin/rides");
@@ -88,11 +121,14 @@ export async function createRide(formData: FormData) {
 export async function updateRide(rideId: string, formData: FormData) {
   await requireRideManager();
   const input = parseRideInput(formData);
+  const gpxFile = await maybeMergeGpx(formData, input);
 
   await db
     .update(schema.rides)
     .set({ ...toRow(input), updatedAt: new Date() })
     .where(eq(schema.rides.id, rideId));
+
+  if (gpxFile) await saveRouteGpx(gpxFile, rideId);
 
   revalidatePath("/rides");
   revalidatePath(`/rides/${rideId}`);

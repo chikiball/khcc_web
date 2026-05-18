@@ -41,7 +41,7 @@ export function RideForm({
   const defaultCode = v.pace_group ?? activeTypes[0]?.code ?? "";
 
   return (
-    <form action={action} className="mt-6 space-y-5">
+    <form action={action} encType="multipart/form-data" className="mt-6 space-y-5">
       <Field
         label="Title"
         name="title"
@@ -130,13 +130,31 @@ export function RideForm({
       </div>
 
       <Field
-        label="Route URL"
+        label="Route URL (Strava, Komoot, etc.)"
         name="route_url"
         type="url"
         defaultValue={v.route_url ?? ""}
         placeholder="https://www.strava.com/routes/..."
         readOnly={readOnly}
       />
+
+      {!readOnly && (
+        <label className="block">
+          <span className="block text-sm font-medium text-ink mb-1">
+            GPX file (optional)
+          </span>
+          <input
+            type="file"
+            name="gpx"
+            accept=".gpx,application/gpx+xml,application/xml"
+            className="block w-full text-sm text-ink-soft file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-cream-100 file:text-ink hover:file:bg-cream-200 file:cursor-pointer"
+          />
+          <p className="text-xs text-ink-soft mt-1">
+            Auto-fills distance and elevation if those fields are empty. Strava
+            → Export GPX, Komoot → Download GPX, Garmin Connect, etc.
+          </p>
+        </label>
+      )}
 
       <label className="block">
         <span className="block text-sm font-medium text-ink mb-1">Description</span>
