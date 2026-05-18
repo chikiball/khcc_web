@@ -4,80 +4,168 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What the project is
 
-**KHCC Web** — a Progressive Web App for **Knock House Chop Chop** (cycling club). The "chop chop" identity drives UI tone: terse copy ("In" / "Out" / "Rolling" / "Done"), minimal-tap interactions, no chatty microcopy. Replaces WhatsApp + spreadsheets for ride coordination.
+**KHCC Web** — a Progressive Web App for **Knock House Chop Chop** (cycling club). Fast-pace road cycling: show up, ride hard, coffee, go home. Replaces WhatsApp + spreadsheets for ride coordination.
 
-Stage 1 is shipped (code-complete). See `docs/STAGE1.md` for what's in Stage 1 vs deferred. Full requirements in `docs/REQUIREMENTS.md`.
+Deployed at `https://khcc.nandharu.uk`. Full requirements in `docs/REQUIREMENTS.md`.
 
 ## Commands
 
 ```bash
-npm install            # Node 20+ required
-npm run dev            # Next.js dev on :3000
-npm run build          # production build
-npm run start          # run built app on :3030 (the prod port behind nginx)
-npm run lint           # ESLint
-npm run typecheck      # tsc --noEmit
-npm run db:generate    # drizzle-kit: generate SQL migration from schema.ts changes
-npm run db:migrate     # drizzle-kit: apply pending migrations against DATABASE_URL
-npm run db:push        # drizzle-kit: push schema directly (dev shortcut, no migration file)
-npm run db:studio      # drizzle-kit: open the DB GUI
-npx tsx scripts/seed.ts   # seed sample rides (idempotent — skips if non-empty)
-```
+npm install               # Node 20+ required
+npm run dev               # Next.js dev on :3000
+npm run build             # production build
+npm run start             # run built app on :3030 (prod port behind nginx)
+npm run lint              # ESLint
+npm run typecheck         # tsc --noEmit
+npm run db:generate       # drizzle-kit: generate migration from schema changes
+npm run db:migrate        # drizzle-kit: apply pending migrations
+npm run db:push           # push schema directly (dev shortcut, no migration file)
+npm run db:studio         # open Drizzle Studio GUI
 
-Single test: no test runner wired up yet — add Vitest when the first test arrives (REQUIREMENTS NFR-24 targets ≥60% coverage on RSVP/waitlist/auth-guards).
+# One-off scripts (inside the container — docker exec khcc-web node node_modules/tsx/dist/cli.mjs scripts/<name>.ts)
+scripts/seed.ts                      # seed 3 sample rides with pace groups
+scripts/backfill-route-previews.ts   # generate static map preview images for existing GPX files
+scripts/send-test-email.ts <addr>    # test SMTP relay
+```
 
 ## Architecture
 
-**Stack — fully self-hosted, zero managed dependencies:** Next.js 15 App Router + TypeScript strict · Tailwind v4 (config in `src/app/globals.css` via `@theme`) · **Postgres 16 in Docker** · **Drizzle ORM** for queries + migrations · **Auth.js v5 (NextAuth)** with Google OAuth provider + Drizzle adapter, JWT session strategy · `@ducanh2912/next-pwa`. No Supabase, no Vercel, no Resend, no third-party identity service.
+**Stack — fully self-hosted, zero managed dependencies:**
+Next.js 15 App Router + TypeScript strict · Tailwind v4 · **Postgres 16 in Docker** · **Drizzle ORM** · **Auth.js v5** (Google OAuth + email credentials) · Leaflet (OSM tiles) · Sharp (image resizing) · Nodemailer (Gmail SMTP relay) · `@ducanh2912/next-pwa`.
 
-**Auth flow:** `/login` → Auth.js `signIn("google", { callbackUrl })` → Google → `/api/auth/callback/google` (Auth.js handles) → middleware sees the session and routes:
-- new user (`onboardedAt` is null) → `/onboarding`
-- existing user → `/rides`
+No Supabase, no Vercel, no Resend, no third-party identity service beyond Google OAuth at sign-in time.
 
-The session JWT carries `id`, `role`, and `onboarded` — refreshed from the DB on every JWT callback so role promotions and onboarding completion propagate without re-login. **Don't read role from the JWT for security-critical decisions in long-running requests** — always fetch the latest from `users` table when you mutate.
+## Auth flow
 
-**Auth helpers — use these, don't roll your own:**
-- `getCurrentUser()` returns the session user or null
-- `requireUser()` redirects to `/login` if not signed in
-- `requireAdmin()` redirects to `/rides` if not admin
-- `canManageRides(role)` for `leader | organiser | admin` checks
+Two providers on `/login`:
+- **Google** — OAuth, verified email, redirects back through `/api/auth/callback/google`
+- **Email credentials** — user types email, no password, no magic link. Server either creates a new user (`status=pending`) or signs in the existing one. If rejected → auto-flip to `pending` on re-sign-in.
 
-All in `src/lib/auth-helpers.ts`.
+After sign-in:
+- `onboardedAt` null → `/onboarding`
+- `status` pending/rejected → `/pending`
+- `status` approved → `/rides`
 
-**Authorization model — application-level, not RLS.** Postgres has RLS but it's not used because we don't have a managed auth context (Supabase's `auth.uid()`) to key off. Every Server Action / Server Component that touches user data calls `requireUser()` first and scopes queries by `user.id`. The two non-obvious rules:
+Session JWT carries `id`, `role`, `status`, `onboarded`, `paceGroup`. Refreshed from DB on every request while `!approved` or `!onboarded` (transient states that need to propagate without re-login). Once approved + onboarded, JWT caches — no per-request DB hit.
 
-1. **Emergency contact lives in `users_private`**, separate from `users`. Any query against `users` cannot leak it. The only place that should join or select from `users_private` is an explicit "is admin or is the row owner" check. Never widen this.
-2. **Mutations that change someone else's data** (e.g. an admin promoting a user, a leader cancelling a ride) must re-check role from the DB at action time — don't trust the session JWT for these.
+**Auth helpers (src/lib/auth-helpers.ts):**
+```
+getCurrentUser()       session user or null
+requireUser()          redirects /login if not signed in
+requireApproved()      requireUser + status=approved + onboarded check
+requireRideManager()   requireApproved + leader|organiser|admin (404s members)
+requireAdmin()         requireApproved + admin (redirects non-admins)
+canManageRides(role)   boolean — leader | organiser | admin
+```
 
-**Drizzle conventions:**
-- Schema is the source of truth: `src/db/schema.ts`. Don't hand-write migrations.
-- After changing schema: `npm run db:generate` produces a SQL file in `drizzle/`. Commit it.
-- The Docker entrypoint runs `drizzle-kit migrate` before Next.js starts — production migrations are automatic on deploy. Local dev uses `npm run db:push` for fast iteration.
-- Single shared pool in `src/db/index.ts`. Don't `new Pool()` anywhere else.
+**Authorization:** application-level (no RLS). Every Server Action / Server Component gates via the helpers above and scopes DB queries by `user.id`. Never trust the JWT for security-critical mutations — re-read from DB at action time.
 
-**Brand & UI conventions** (derived from team kit photos in `image_src/`):
-- Palette in `src/app/globals.css` `@theme` block — coral pink `coral-*`, deep maroon `maroon-*`, coral red `flash-*`, cream `cream-*`. Use the semantic aliases (`brand`, `ink`, `paper`) where possible.
-- Display font: Bricolage Grotesque (headings). Body: Inter.
-- Hex-badge motif via `.hex-clip` clip-path — recurring shape for KHCC logo, pace badges, app icon.
-- Pace group is **never colour-only** (NFR-6) — `<PaceBadge>` always renders the letter.
-- Tap targets ≥ 44px enforced via global `button { min-height: 44px }` (gloves — NFR-5).
+## Schema (10 tables)
 
-**Deployment.** `khcc.nandharu.uk` on the home server. Two containers on the external `server-net` Docker network: `khcc-db` (Postgres 16, named volume `khcc_db_data`) and `khcc-web` (Next.js standalone build). Reverse-proxied by an upstream nginx via `nginx/khcc.conf`. Migrations run automatically on container start via `docker/entrypoint.sh` before Next.js boots. Deploy with `scripts/deploy.sh`.
+**Auth.js tables** (managed by adapter): `users`, `accounts`, `verificationTokens`
 
-**Build-time vs runtime env.** Auth.js secrets, DB URL, Google client secret are runtime-only — never baked into the image. `NEXT_PUBLIC_SITE_URL` and `AUTH_GOOGLE_ID` (the public ID is fine to expose) are passed as build args because the Auth.js client uses them in browser bundles.
+`users` is extended with KHCC profile fields: `role`, `status` (pending/approved/rejected), `paceGroup` (rider's preferred pace), `onboardedAt`, `bike`, `stravaHandle`, `bio`, `hideFromDirectory`.
 
-## Cross-cutting constraints (still apply from REQUIREMENTS)
+`users_private` — emergency contact (name + phone). Kept in a separate table so no query against `users` can accidentally leak it. Only join this table in admin-gated or self-only paths.
 
-- Mobile-first 375px min width; gloves-friendly 44pt tap targets.
-- WCAG 2.1 AA, `prefers-reduced-motion` respected (already in globals.css).
-- Times stored UTC, displayed in member's local tz. Metric units default.
-- i18n-ready: prefer translation keys to hard-coded strings even though English is the only launch language.
-- TypeScript strict mode mandated.
+`rides` — event header: title, starts_at, start_point (lat/lng), distance/elevation (defaults), route_url, description, status (scheduled/weather-watch/cancelled/completed), cancellation audit columns.
+
+`ride_pace_groups` — **one or many per ride**, each with its own pace_code (FK → ride_types), leader, cap, distance/elevation overrides, notes, per-pace status (scheduled/cancelled). Unique on (ride_id, pace_code).
+
+`ride_rsvps` — (ride_id, user_id) PK → one pace per rider per ride. Has `pace_group_id` FK so RSVPs are tied to the specific pace chosen. Switching pace = upsert updates `pace_group_id`.
+
+`ride_types` — admin-editable pace catalogue: code, name, description, color preset, position, active. Replaces the old hardcoded A/B/C enum.
+
+`content_blocks` — key-value admin CMS for the landing page ("about", "achievements").
+
+`gallery_photos` — admin-uploaded photos shown in the landing-page carousel.
+
+## Multi-pace rides
+
+A ride can offer A + B + C (or any subset of `ride_types`). Key points:
+- One rider per ride, one pace (PK enforces it). Switching pace = upsert.
+- Per-pace cancellation: admin can cancel just B while A and C run. If all paces cancel, ride auto-cancels.
+- All leaders on the ride (any pace) can see emergency contacts for all RSVP'd riders — cross-pace visibility for safety.
+- `ride_pace_groups.distanceKm/elevationM` override the ride-level defaults when set; fall back to `rides.distanceKm/elevationM` otherwise.
+
+## Uploads
+
+User-uploaded files go to the host-side bind-mount `./uploads/`, accessible inside the container at `/app/public/uploads/`. Next.js standalone doesn't include these in its build manifest, so they're served by the route handler at `src/app/uploads/[...path]/route.ts`.
+
+Sub-directories:
+- `uploads/avatars/` — profile avatars, 512×512 JPEG (sharp resize)
+- `uploads/gallery/` — landing-page gallery photos, 1024×1024 JPEG (sharp)
+- `uploads/routes/` — GPX files (`<rideId>.gpx`) + static map previews (`<rideId>-preview.jpg`)
+
+Static map previews: generated server-side on GPX upload by `src/lib/static-map.ts` — stitches OSM tiles + SVG polyline overlay using sharp.
+
+## Maps (Leaflet + OSM)
+
+`src/components/map-picker.tsx` — client component (dynamic-imported, `ssr: false`). Used in two ways:
+- **Admin ride form**: tap to drop a pin, fills lat/lng inputs. `src/components/location-fields.tsx` wraps it with the text inputs.
+- **Ride detail**: read-only map with a dark-blue polyline overlay when a GPX exists (`src/components/ride-detail-map.tsx`).
+
+OSM tile attribution must remain visible (policy requirement). Polyline color is `#1e40af` (dark blue).
+
+## GPX upload
+
+Admin uploads a `.gpx` file when creating/editing a ride. Server:
+1. Parses distance (Haversine) + elevation gain (summed positive deltas, 0.5m noise threshold) — `src/lib/gpx.ts`
+2. Overwrites the form's distance + elevation values (GPX always wins)
+3. Saves raw file to `/uploads/routes/<rideId>.gpx`
+4. Generates a static map preview (best-effort — failure never blocks the save)
+
+Members on the ride detail page see the polyline on the map, a "Download GPX ↓" link, and a "Route ↗" link for the Strava/external URL.
+
+## Email (SMTP via Gmail)
+
+Transactional emails use Nodemailer → Gmail app password (`khcc.cyclingclub@gmail.com`). Set in `.env` as `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`. Sent for:
+- Member approved / rejected / access removed (`src/app/admin/members/actions.ts`)
+
+Helper: `sendEmail()` + `emailTemplate()` in `src/lib/email.ts`.
+
+## Content + Gallery CMS
+
+Admin-only pages under `/admin` (in the layout nav for `role=admin`):
+- `/admin/members` — approval queue (pending/approved/rejected tabs), remove access
+- `/admin/types` — add/edit/disable ride types with color presets
+- `/admin/rides` — ride list; `/admin/rides/new` + `/admin/rides/[id]/edit`
+- `/admin/content` — edit "About" + "Achievements" sections on the landing page
+- `/admin/gallery` — upload/delete/edit-alt photos for the landing carousel
+
+Ride managers (`leader | organiser | admin`) can access `/admin/rides` but not the other admin pages.
+
+## Deployment
+
+`khcc.nandharu.uk` on home server, behind a Cloudflare Tunnel → nginx-gateway → docker-compose on external `server-net`.
+
+```bash
+./scripts/deploy.sh   # pulls, roles password sync, builds, migrates, starts
+```
+
+Key env (on the server at `.env`):
+- `POSTGRES_PASSWORD`, `PGHOST=khcc-db`, `PGUSER`, `PGDATABASE` — DB via PG* vars (not DATABASE_URL, which mangles passwords with special chars)
+- `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `NEXT_PUBLIC_SITE_URL`
+- `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` — set once, passed as build arg AND runtime to keep action IDs stable across deploys
+- `SMTP_*` — Gmail relay for approval emails
+
+Migration runs automatically in `docker/entrypoint.sh` before Next.js boots. No manual step on deploy.
+
+## Brand & UI
+
+- Palette: `src/app/globals.css` `@theme` — coral pink `coral-*`, deep maroon `maroon-*`, coral red `flash-*`, cream `cream-*`. Semantic aliases: `brand`, `ink`, `paper`.
+- Fonts: Bricolage Grotesque (display/headings), Inter (body).
+- Hex-badge `.hex-clip` — pace badges, KHCC logo mark. **Pace badge always shows the letter** (NFR-6, never colour-only).
+- Avatar shape: `rounded-full` (circle). Hex stays on the pace badges and branded badges, not user photos.
+- Tap targets ≥ 44px (`button { min-height: 44px }` in globals — NFR-5, gloves).
+- Color presets for ride types: coral / maroon / flash / emerald / sky / amber. Defined in `src/lib/ride-types.ts` — add a new preset there (all Tailwind class strings must be literal for build to include them).
 
 ## Don't
 
-- Don't reach for a managed service (Supabase, Vercel KV, Clerk, Auth0, Resend) — the explicit goal is zero managed dependencies.
-- Don't add features from REQUIREMENTS Phase 2/3 (trips, Strava, races, leaderboard, live safety, incidents) into Stage 1 — they're deliberately deferred.
-- Don't hand-write SQL migrations. Edit `src/db/schema.ts` and run `npm run db:generate`.
-- Don't read emergency contact except through an explicit admin-or-self check that joins `users_private`.
-- Don't put `AUTH_SECRET`, `AUTH_GOOGLE_SECRET`, `DATABASE_URL`, or `POSTGRES_PASSWORD` into Dockerfile `ARG` — they're runtime env only.
+- Don't use managed services (Supabase, Vercel, Clerk, Auth0) — self-hosted is an explicit product decision.
+- Don't hand-write SQL migrations — edit `src/db/schema.ts` and run `npm run db:generate`.
+- Don't put `AUTH_SECRET`, `AUTH_GOOGLE_SECRET`, `POSTGRES_PASSWORD` in Dockerfile `ARG` — runtime only.
+- Don't select from `users_private` except in explicit admin/self-gated paths.
+- Don't trust the JWT for security mutations — fetch fresh role from DB in the Server Action.
+- Don't set `PGHOST=db` in docker-compose — use the container name `khcc-db` to avoid DNS collisions with other compose projects on the same `server-net` (this was the root cause of hours of password-mismatch debugging).
+- Don't add features from Phase 2/3 (trips, Strava, races, leaderboard, live safety) — explicitly deferred.
