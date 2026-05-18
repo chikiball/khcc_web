@@ -2,11 +2,26 @@
 
 **Knock House Chop Chop** — a fast-pace road cycling club. PWA for ride coordination.
 
-Fully self-hosted, zero managed dependencies. Postgres + Auth.js + Next.js, all in Docker on a home server.
+Fully self-hosted, zero managed dependencies. Postgres + Auth.js + Next.js, all in Docker on a home server. Live at [khcc.nandharu.uk](https://khcc.nandharu.uk).
+
+## What's in it (Phase 1, shipped)
+
+- **Auth** — Google OAuth + email-credentials. Admin-approval queue. Auto-flip rejected → pending on re-sign-in.
+- **Member terms** — required risk-waiver / agreement before onboarding; re-readable from the profile.
+- **Onboarding** — name, photo, pace, bike, Strava handle, emergency contact (in a separate restricted table).
+- **Rides** — multi-pace event header (one ride, A + B + C all on the same row), per-pace leader / cap / overrides, per-pace cancellation.
+- **Recurring rides** — weekly / biweekly with **lazy materialisation** (one live future occurrence per series; cron spawns the next on cancel or completion).
+- **Maps + GPX** — Leaflet + OpenStreetMap. Tap-to-pin start point, GPX upload auto-fills distance + elevation, polyline overlay on detail map, downloadable GPX, and a server-rendered route preview image on the rides list.
+- **Weather** — Open-Meteo forecast pill on cards (icon + temp + wind chip when ≥ 20 km/h) and a full block on detail (sunrise/sunset, precip%).
+- **Member directory** — `/members` with search and pace filter; click any rider in an RSVP list to view their profile.
+- **Admin tools** — approval queue, role assignment, ride types catalogue (replaces the hardcoded A/B/C enum), landing-page CMS, gallery uploader.
+- **PWA** — installable, conservative offline cache.
+
+What's deliberately **not** here yet: announcements, ride email reminders, waitlist, Strava integration, overseas trips, race calendar, live safety. See `docs/REQUIREMENTS_V2.html` for the full implementation status.
 
 ## Stack
 
-Next.js 15 (App Router) + TypeScript · Tailwind v4 · **Postgres 16 in Docker** · **Drizzle ORM** · **Auth.js v5** (Google OAuth) · `@ducanh2912/next-pwa`.
+Next.js 15 (App Router) + TypeScript strict · Tailwind v4 · **Postgres 16 in Docker** · **Drizzle ORM** · **Auth.js v5** (Google + email-credentials) · Leaflet/OSM · Sharp · Nodemailer (Gmail) · Open-Meteo · `@ducanh2912/next-pwa`.
 
 ## Local development
 
@@ -74,4 +89,25 @@ sudo nginx -t && sudo nginx -s reload
 
 The deploy script brings up `db` first, waits for healthy, then builds and starts `khcc-web`. Migrations run automatically on container start (via `docker/entrypoint.sh`).
 
-Full step-by-step setup is in `docs/STAGE1.md`.
+### Cron — recurring-ride materialisation
+
+Generate a secret, put it in `.env` as `CRON_SECRET`, recreate the web container so the env propagates, then schedule the host crontab to hit the endpoint weekly:
+
+```bash
+# generate + persist the secret
+CS=$(openssl rand -hex 32)
+echo "CRON_SECRET=$CS" | sudo tee -a .env
+docker compose up -d khcc-web
+
+# crontab -e
+0 19 * * 6 curl -s "https://khcc.nandharu.uk/api/cron/materialize-rides?secret=$CRON_SECRET" >> /var/log/khcc-cron.log 2>&1
+```
+
+The endpoint is idempotent — safe to hit any time.
+
+## Documentation
+
+- `docs/REQUIREMENTS.html` / `.md` — original V0.1 requirements (pre-implementation).
+- `docs/REQUIREMENTS_V2.html` — implementation snapshot: what shipped, what's planned, what's deferred.
+- `docs/STAGE1.md` — original Phase 1 implementation notes.
+- `CLAUDE.md` — architectural guide for any contributor (or AI assistant) working on the codebase.
