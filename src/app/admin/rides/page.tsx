@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db, schema } from "@/db";
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, gte } from "drizzle-orm";
 import { colorClasses } from "@/lib/ride-types";
 
 export const dynamic = "force-dynamic";
@@ -12,13 +12,25 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-type SearchParams = Promise<{ status?: string }>;
+// Show recent + future rides only by default. Going further back is opt-in
+// via ?range=all so a club with thousands of historical rides doesn't render
+// every row in one page (which used to self-DoS the rate limiter via
+// concurrent RSC prefetches on every visible <Link>).
+const RECENT_DAYS = 30;
+
+type SearchParams = Promise<{ status?: string; range?: string }>;
 
 export default async function AdminRidesPage({ searchParams }: { searchParams: SearchParams }) {
-  const { status } = await searchParams;
+  const { status, range } = await searchParams;
+  const showAll = range === "all";
+
+  const since = new Date();
+  since.setDate(since.getDate() - RECENT_DAYS);
 
   const [rides, paceGroups, rideTypes, seriesList] = await Promise.all([
-    db.select().from(schema.rides).orderBy(desc(schema.rides.startsAt)),
+    db.select().from(schema.rides)
+      .where(showAll ? undefined : gte(schema.rides.startsAt, since))
+      .orderBy(desc(schema.rides.startsAt)),
     db.select().from(schema.ridePaceGroups).orderBy(asc(schema.ridePaceGroups.position)),
     db.select().from(schema.rideTypes).orderBy(asc(schema.rideTypes.position)),
     db.select({ id: schema.rideSeries.id, rule: schema.rideSeries.rule, active: schema.rideSeries.active })
@@ -51,6 +63,18 @@ export default async function AdminRidesPage({ searchParams }: { searchParams: S
           <FilterPill key={value} label={label} href={`/admin/rides?status=${value}`} active={status === value} />
         ))}
       </nav>
+
+      <p className="mt-4 text-xs text-ink-soft">
+        Showing {showAll ? "all rides" : `last ${RECENT_DAYS} days + upcoming`}
+        {" · "}
+        <Link
+          href={showAll ? "/admin/rides" : "/admin/rides?range=all"}
+          prefetch={false}
+          className="text-coral-700 hover:text-coral-800 underline underline-offset-4"
+        >
+          {showAll ? "Show recent only" : "Show all"}
+        </Link>
+      </p>
 
       <ul className="mt-6 space-y-2">
         {filtered.length === 0 && (
@@ -99,7 +123,7 @@ export default async function AdminRidesPage({ searchParams }: { searchParams: S
                 </p>
               </div>
 
-              <Link href={`/admin/rides/${ride.id}/edit`} className="text-sm text-coral-700 hover:text-coral-800 font-medium">
+              <Link href={`/admin/rides/${ride.id}/edit`} prefetch={false} className="text-sm text-coral-700 hover:text-coral-800 font-medium">
                 Edit →
               </Link>
             </li>
