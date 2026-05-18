@@ -150,7 +150,7 @@ export function RideForm({
             className="block w-full text-sm text-ink-soft file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-cream-100 file:text-ink hover:file:bg-cream-200 file:cursor-pointer"
           />
           <p className="text-xs text-ink-soft mt-1">
-            Auto-fills distance and elevation if those fields are empty. Strava
+            Replaces distance and elevation with values from the file. Strava
             → Export GPX, Komoot → Download GPX, Garmin Connect, etc.
           </p>
         </label>

@@ -73,9 +73,12 @@ function toRow(input: RideInput) {
 }
 
 /**
- * If a .gpx file was uploaded, parse it and merge distance + elevation
- * into the input — but only where the leader didn't type a value
- * themselves. Leader-typed values always win over GPX-derived values.
+ * If a .gpx file was uploaded, parse it and overwrite distance + elevation
+ * on the input. GPX wins because the most common edit-with-GPX flow is
+ * "I have a new/updated route, refresh the numbers from it" — and on edit
+ * the manual fields are pre-filled from the previous values, so an "only
+ * fill if empty" rule meant the upload silently did nothing.
+ *
  * Returns the File so the caller can persist it once the ride id exists.
  */
 async function maybeMergeGpx(
@@ -94,8 +97,8 @@ async function maybeMergeGpx(
   const text = await file.text();
   const parsed = parseGpx(text);
 
-  if (!input.distance_km) input.distance_km = String(parsed.distanceKm);
-  if (!input.elevation_m) input.elevation_m = String(parsed.elevationM);
+  input.distance_km = String(parsed.distanceKm);
+  input.elevation_m = String(parsed.elevationM);
 
   return file;
 }
