@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KHCC Web — Requirements V2.0 (Implemented State)</title>
+<style>
+  :root {
+    --brand-500: #E63946; --brand-600: #C92A38; --brand-100: #FDE7E9;
+    --ink-900: #0F1115; --ink-700: #2A2F37; --ink-500: #5C626C;
+    --ink-300: #B8BDC6; --ink-100: #EEF0F3; --paper: #FFFFFF; --bg: #F7F8FA;
+    --success: #16A34A; --warning: #F59E0B; --danger: #DC2626; --info: #2563EB;
+    --pace-A: #111827; --pace-B: #E63946; --pace-C: #2563EB;
+    --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-display: "Space Grotesk", "Inter", sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+    --r-sm: 6px; --r-md: 10px; --r-lg: 16px; --r-full: 999px;
+    --shadow-1: 0 1px 2px rgba(15,17,21,.06), 0 1px 3px rgba(15,17,21,.08);
+    --shadow-2: 0 4px 12px rgba(15,17,21,.08), 0 2px 4px rgba(15,17,21,.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-sans); color: var(--ink-900); background: var(--bg);
+    line-height: 1.6; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 48px 24px; }
+
+  /* Cover */
+  .cover {
+    background: linear-gradient(135deg, var(--ink-900) 0%, #1a1f27 60%, var(--brand-600) 100%);
+    color: #fff; border-radius: 20px; padding: 56px 40px; margin-bottom: 32px;
+    box-shadow: var(--shadow-2); position: relative; overflow: hidden;
+  }
+  .cover::after {
+    content: ""; position: absolute; right: -80px; bottom: -80px; width: 320px; height: 320px;
+    border-radius: 50%; background: radial-gradient(circle, rgba(230,57,70,.35), transparent 70%);
+  }
+  .cover .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px;
+    background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2);
+    border-radius: 999px; font-size: 12px; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; margin-bottom: 20px;
+  }
+  .cover h1 {
+    font-family: var(--font-display); font-size: 56px; line-height: 1.02;
+    font-weight: 700; letter-spacing: -0.03em; margin: 0 0 12px;
+  }
+  .cover p { font-size: 18px; color: rgba(255,255,255,.8); max-width: 620px; margin: 0 0 28px; }
+  .cover .meta { display: flex; flex-wrap: wrap; gap: 20px; font-size: 13px; color: rgba(255,255,255,.7); position: relative; z-index: 1; }
+  .cover .meta b { color: #fff; font-weight: 600; display: block; font-size: 14px; }
+
+  /* Typography */
+  h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.02em; color: var(--ink-900); }
+  h2 {
+    font-size: 28px; font-weight: 700; margin: 56px 0 16px;
+    padding-bottom: 10px; border-bottom: 2px solid var(--brand-500);
+  }
+  h2 .num { color: var(--brand-500); margin-right: 12px; font-variant-numeric: tabular-nums; }
+  h3 { font-size: 20px; font-weight: 600; margin: 32px 0 12px; color: var(--ink-900); }
+  h4 { font-size: 15px; font-weight: 600; margin: 20px 0 8px; color: var(--ink-700); }
+  p { margin: 0 0 14px; color: var(--ink-700); }
+  strong, b { color: var(--ink-900); }
+  a { color: var(--brand-600); text-decoration: none; border-bottom: 1px dashed var(--brand-500); }
+  a:hover { color: var(--brand-500); }
+
+  code {
+    font-family: var(--font-mono); font-size: 13px;
+    background: var(--ink-100); padding: 2px 6px; border-radius: var(--r-sm);
+    color: var(--ink-900);
+  }
+
+  /* Lists */
+  ul, ol { padding-left: 22px; margin: 0 0 14px; color: var(--ink-700); }
+  li { margin-bottom: 6px; }
+  li::marker { color: var(--brand-500); }
+
+  /* Tables */
+  .table-wrap { overflow-x: auto; margin: 14px 0 20px; border-radius: var(--r-md); border: 1px solid var(--ink-100); background: var(--paper); box-shadow: var(--shadow-1); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  thead { background: var(--ink-100); }
+  th {
+    text-align: left; padding: 12px 16px; font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--ink-500);
+  }
+  td { padding: 12px 16px; border-top: 1px solid var(--ink-100); color: var(--ink-700); vertical-align: top; }
+  tbody tr:hover { background: #FAFBFC; }
+
+  /* Callouts */
+  .callout {
+    border-left: 4px solid var(--brand-500); background: var(--brand-100);
+    padding: 14px 18px; border-radius: 0 var(--r-md) var(--r-md) 0;
+    margin: 16px 0; font-size: 14px; color: var(--ink-900);
+  }
+  .callout.info { border-color: var(--info); background: #DBEAFE; }
+  .callout.warn { border-color: var(--warning); background: #FEF3C7; }
+  .callout.success { border-color: var(--success); background: #DCFCE7; }
+
+  /* Chips */
+  .chip {
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    background: var(--ink-100); color: var(--ink-700); margin-right: 4px;
+  }
+  .chip-phase1 { background: var(--brand-100); color: var(--brand-600); }
+  .chip-phase2 { background: #DBEAFE; color: #1E40AF; }
+  .chip-phase3 { background: #DCFCE7; color: #14532D; }
+  .chip-must { background: var(--ink-900); color: #fff; }
+
+  /* Status chips */
+  .chip-done { background: #DCFCE7; color: #14532D; }
+  .chip-partial { background: #FEF3C7; color: #78350F; }
+  .chip-planned { background: #DBEAFE; color: #1E40AF; }
+  .chip-deferred { background: var(--ink-100); color: var(--ink-500); }
+
+  /* FR card */
+  .fr {
+    background: var(--paper); border: 1px solid var(--ink-100);
+    border-radius: var(--r-lg); padding: 20px 24px; margin: 14px 0;
+    box-shadow: var(--shadow-1);
+  }
+  .fr.done { border-left: 4px solid var(--success); }
+  .fr.partial { border-left: 4px solid var(--warning); }
+  .fr.planned { border-left: 4px solid var(--info); }
+  .fr.deferred { border-left: 4px solid var(--ink-300); opacity: 0.85; }
+  .fr h4 {
+    margin: 0 0 10px; font-family: var(--font-display);
+    font-size: 17px; font-weight: 700; color: var(--ink-900);
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .fr h4 .id {
+    font-family: var(--font-mono); font-size: 12px; color: var(--brand-500);
+    background: var(--brand-100); padding: 2px 8px; border-radius: var(--r-sm);
+  }
+  .fr ul { margin: 8px 0 10px; }
+  .fr ul li.done::marker { color: var(--success); }
+  .fr ul li.todo::marker { color: var(--ink-300); }
+  .fr ul li.todo { color: var(--ink-500); }
+  .fr .ac {
+    background: #F0FDF4; border-left: 3px solid var(--success);
+    padding: 8px 12px; border-radius: 0 var(--r-sm) var(--r-sm) 0;
+    font-size: 13px; color: var(--ink-700); margin-top: 8px;
+  }
+  .fr .ac b { color: #14532D; }
+  .fr .note {
+    background: #FFFBEB; border-left: 3px solid var(--warning);
+    padding: 8px 12px; border-radius: 0 var(--r-sm) var(--r-sm) 0;
+    font-size: 13px; color: var(--ink-700); margin-top: 8px;
+  }
+  .fr .note b { color: #78350F; }
+
+  /* TOC */
+  .toc {
+    background: var(--paper); border: 1px solid var(--ink-100);
+    border-radius: var(--r-lg); padding: 20px 24px; margin-bottom: 32px;
+    box-shadow: var(--shadow-1);
+  }
+  .toc h4 { margin: 0 0 12px; text-transform: uppercase; letter-spacing: .08em; font-size: 12px; color: var(--ink-500); }
+  .toc ol { column-count: 2; column-gap: 28px; padding-left: 20px; }
+  .toc ol li { break-inside: avoid; }
+  .toc a { border-bottom: none; color: var(--ink-700); font-size: 14px; }
+  .toc a:hover { color: var(--brand-500); }
+
+  /* Status dashboard */
+  .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 14px 0 20px; }
+  .status-card {
+    background: var(--paper); border: 1px solid var(--ink-100);
+    border-radius: var(--r-lg); padding: 16px; box-shadow: var(--shadow-1);
+    text-align: center;
+  }
+  .status-card .count {
+    font-family: var(--font-display); font-size: 32px; font-weight: 700;
+    line-height: 1;
+  }
+  .status-card.done .count { color: var(--success); }
+  .status-card.partial .count { color: var(--warning); }
+  .status-card.planned .count { color: var(--info); }
+  .status-card.deferred .count { color: var(--ink-500); }
+  .status-card .label { font-size: 12px; color: var(--ink-500); margin-top: 6px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+
+  /* Persona cards */
+  .personas { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 14px 0; }
+  .persona {
+    background: var(--paper); border: 1px solid var(--ink-100);
+    border-radius: var(--r-lg); padding: 18px; box-shadow: var(--shadow-1);
+  }
+  .persona .avatar {
+    width: 44px; height: 44px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-family: var(--font-display); font-size: 16px;
+    margin-bottom: 10px;
+  }
+  .persona h4 { margin: 0 0 4px; font-size: 16px; }
+  .persona .role { font-size: 12px; color: var(--ink-500); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; margin-bottom: 10px; }
+  .persona p { font-size: 13px; margin: 0; }
+
+  /* Risk severity */
+  .sev { font-weight: 700; font-size: 11px; padding: 2px 8px; border-radius: var(--r-sm); letter-spacing: .04em; text-transform: uppercase; }
+  .sev-h { background: #FEE2E2; color: #7F1D1D; }
+  .sev-m { background: #FEF3C7; color: #78350F; }
+  .sev-l { background: #DCFCE7; color: #14532D; }
+
+  /* Footer */
+  footer { margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--ink-100); font-size: 13px; color: var(--ink-500); }
+
+  /* Print */
+  @media print {
+    body { background: #fff; }
+    .cover { break-inside: avoid; box-shadow: none; }
+    h2 { break-after: avoid; }
+    .fr, .persona, .status-card { break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
+    a { color: var(--ink-900); border-bottom: none; }
+  }
+
+  @media (max-width: 640px) {
+    .cover { padding: 32px 24px; }
+    .cover h1 { font-size: 36px; }
+    .toc ol { column-count: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- COVER -->
+  <section class="cover">
+    <span class="eyebrow">🚴 KHCC Web · Requirements V2.0</span>
+    <h1>What we built, and what's next.</h1>
+    <p>A self-hosted Progressive Web App for KHCC (Knock House Chop Chop) — replacing WhatsApp and spreadsheets with a single source of truth for rides, members, and club content. This document records the implemented state and the deliberately-deferred backlog.</p>
+    <div class="meta">
+      <div><b>Version</b>2.0</div>
+      <div><b>Last updated</b>18 May 2026</div>
+      <div><b>Live at</b>khcc.nandharu.uk</div>
+      <div><b>Status</b>Phase 1 shipped &amp; live</div>
+    </div>
+  </section>
+
+  <!-- STATUS DASHBOARD -->
+  <div class="status-grid">
+    <div class="status-card done">
+      <div class="count">11</div>
+      <div class="label">Functional · Done</div>
+    </div>
+    <div class="status-card partial">
+      <div class="count">2</div>
+      <div class="label">Functional · Partial</div>
+    </div>
+    <div class="status-card planned">
+      <div class="count">2</div>
+      <div class="label">Phase 1 · Planned</div>
+    </div>
+    <div class="status-card deferred">
+      <div class="count">7</div>
+      <div class="label">Phase 2 / 3 · Deferred</div>
+    </div>
+  </div>
+
+  <div class="callout success">
+    <strong>What changed since V0.1.</strong> The most consequential pivot: <strong>fully self-hosted</strong> — Postgres in Docker, Auth.js, Drizzle, Leaflet/OSM, Nodemailer over Gmail, Cloudflare Tunnel. No Supabase, Vercel, Mapbox, or Resend. We also replaced the hardcoded A/B/C pace enum with admin-editable ride types, made every ride multi-pace by default, added GPX upload + map polyline overlays, route preview images, weather forecasts, recurring rides via lazy materialisation, member directory, and a member terms-acceptance flow.
+  </div>
+
+  <!-- TOC -->
+  <nav class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><a href="#s1">Overview</a></li>
+      <li><a href="#s2">Goals &amp; Success Metrics</a></li>
+      <li><a href="#s3">User Personas</a></li>
+      <li><a href="#s4">Roles &amp; Permissions</a></li>
+      <li><a href="#s5">Functional Requirements</a></li>
+      <li><a href="#s6">Non-Functional Requirements</a></li>
+      <li><a href="#s7">Data Model</a></li>
+      <li><a href="#s8">Tech Stack</a></li>
+      <li><a href="#s9">Release Status</a></li>
+      <li><a href="#s10">Risks &amp; Mitigations</a></li>
+      <li><a href="#s11">Open Questions</a></li>
+      <li><a href="#s12">Appendix</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <section id="s1">
+    <h2><span class="num">01</span>Overview</h2>
+    <h3>1.1 Purpose</h3>
+    <p>KHCC Web is a Progressive Web App for <strong>KHCC (Knock House Chop Chop)</strong>, a road-cycling club. It coordinates weekly rides, member profiles, ride leadership, route sharing, and club content — all in one place, on a phone, fast enough to glance at while standing in lycra.</p>
+
+    <h3>1.2 Scope</h3>
+    <p>This V2.0 document records what is implemented and live at <code>khcc.nandharu.uk</code>, plus what remains in scope for Phase 1 and what is intentionally deferred to Phase 2 or 3. It supersedes the V0.1 draft.</p>
+
+    <h3>1.3 Out of scope (deliberate)</h3>
+    <ul>
+      <li>Native iOS/Android apps — PWA only.</li>
+      <li>Payment processing of any kind. The club uses external channels (PayNow, etc.) for membership dues and trip deposits.</li>
+      <li>Strava integration / activity import.</li>
+      <li>Live location / safety tracking (Strava-Beacon-style).</li>
+      <li>Coaching tools, training plans, or AI features.</li>
+      <li>Race calendar, results, season leaderboard.</li>
+      <li>Overseas-trip workflow.</li>
+      <li>Public-facing pages beyond the landing page (everything past sign-in is members-only).</li>
+    </ul>
+  </section>
+
+  <!-- 2 -->
+  <section id="s2">
+    <h2><span class="num">02</span>Goals &amp; Success Metrics</h2>
+    <p>Targets unchanged from V0.1; baseline measurements pending first six months of live use.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Target</th><th>Measure</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>≥ 80% of weekly rides created &amp; RSVP'd in-app</td><td>Within 6 months of launch</td><td><span class="chip chip-planned">Pending live data</span></td></tr>
+          <tr><td>&lt; 15 min/week per leader of admin overhead</td><td>Self-reported</td><td><span class="chip chip-planned">Pending live data</span></td></tr>
+          <tr><td>≥ 50% of new members complete first ride within 30 days</td><td>RSVP-status query</td><td><span class="chip chip-planned">Pending live data</span></td></tr>
+          <tr><td>≥ 70% monthly active members</td><td>Login count / total members</td><td><span class="chip chip-planned">Pending live data</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section id="s3">
+    <h2><span class="num">03</span>User Personas</h2>
+    <p>Personas unchanged from V0.1 — they continue to anchor every UX decision.</p>
+    <div class="personas">
+      <div class="persona">
+        <div class="avatar" style="background:#E63946">P</div>
+        <h4>Priya</h4>
+        <div class="role">The Regular · Primary</div>
+        <p>Rides 2–3× a week, mid-pace (B). Checks her phone night before and morning of. Needs: <em>Is the ride on? Who's coming? Where do we meet?</em></p>
+      </div>
+      <div class="persona">
+        <div class="avatar" style="background:#111827">W</div>
+        <h4>Wei</h4>
+        <div class="role">The Ride Leader</div>
+        <p>Organises Saturday bunch. Spends ~1hr/week on coordination. Needs tools to create rides (one-off + recurring), cancel on weather, track RSVPs and emergency contacts.</p>
+      </div>
+      <div class="persona">
+        <div class="avatar" style="background:#2563EB">A</div>
+        <h4>Arun</h4>
+        <div class="role">The New Member</div>
+        <p>Just joined. Unsure of pace group. Nervous about etiquette. Wants a gentle on-ramp: visible faces, clear meet points, no-drop B/C rides.</p>
+      </div>
+      <div class="persona">
+        <div class="avatar" style="background:#F59E0B">K</div>
+        <h4>Kumar</h4>
+        <div class="role">Committee / Admin</div>
+        <p>Manages membership approvals, ride types, content, and gallery. Needs a member directory, a role/approval queue, and content CMS.</p>
+      </div>
+    </div>
+    <div class="callout info">
+      <strong>Mei (Racer / Trip Regular)</strong> remains a defined persona but her use cases (overseas trips, racing) are deferred to Phase 2/3. The current site does not serve her specific needs beyond the basics.
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section id="s4">
+    <h2><span class="num">04</span>User Roles &amp; Permissions</h2>
+    <p>Implementation uses a single <code>role</code> column on <code>users</code> with four values, plus a <code>status</code> column for the approval state.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Role</th><th>Permissions</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Member</strong></td><td>RSVP to rides, browse member directory, view own + others' profiles, post photos via gallery (admin only currently). Cannot manage rides.</td><td><span class="chip chip-done">Done</span></td></tr>
+          <tr><td><strong>Leader</strong></td><td>Member permissions + create / edit / cancel rides, see emergency contacts on rides they're managing.</td><td><span class="chip chip-done">Done</span></td></tr>
+          <tr><td><strong>Organiser</strong></td><td>Same scope as Leader in current implementation. Reserved for future trip-organiser permissions.</td><td><span class="chip chip-partial">Reserved</span></td></tr>
+          <tr><td><strong>Admin</strong> <span class="chip chip-must">All access</span></td><td>All Leader perms + manage members (approve / reject / change role), manage ride types, edit landing-page content, manage gallery.</td><td><span class="chip chip-done">Done</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h4>Approval status (<code>users.status</code>)</h4>
+    <ul>
+      <li><code>pending</code> — sees /pending screen; cannot use member features.</li>
+      <li><code>approved</code> — full member access.</li>
+      <li><code>rejected</code> — sees /pending screen with explanation; <strong>auto-flips to <code>pending</code></strong> on next sign-in attempt (re-applying is a one-tap loop, not a permanent ban).</li>
+    </ul>
+    <p>Authorisation is enforced application-side via Server Actions and Server Components calling <code>requireUser() / requireApproved() / requireRideManager() / requireAdmin()</code>. There is no Postgres RLS — the security boundary is the helper layer.</p>
+  </section>
+
+  <!-- 5 -->
+  <section id="s5">
+    <h2><span class="num">05</span>Functional Requirements</h2>
+    <h3>5.1 Phase 1 — MVP <span class="chip chip-phase1">Phase 1</span></h3>
+
+    <div class="fr done">
+      <h4><span class="id">FR-1</span> Authentication &amp; Onboarding <span class="chip chip-done">Done</span></h4>
+      <ul>
+        <li class="done">FR-1.1 — Sign in via Google OAuth or email-credentials (no password, no link). New users land on /pending until admin approval.</li>
+        <li class="done">FR-1.2 — New members must accept the KHCC member agreement (terms / risk waiver) before reaching onboarding.</li>
+        <li class="done">FR-1.3 — Onboarding form: display name, photo, pace group, bike, Strava handle, emergency contact.</li>
+        <li class="done">FR-1.4 — JWT sessions persist across devices. Rejected users auto-flip to pending on re-sign-in.</li>
+        <li class="todo">FR-1.5 — Admin invites with pre-assigned role <span class="chip chip-deferred">Deferred</span></li>
+      </ul>
+      <div class="ac"><b>Acceptance:</b> A new user goes from landing → signed in → terms accepted → profile completed in under 3 minutes on mobile. ✅</div>
+    </div>
+
+    <div class="fr done">
+      <h4><span class="id">FR-2</span> Ride Calendar <span class="chip chip-done">Done</span></h4>
+      <ul>
+        <li class="done">FR-2.1 — Scrollable list of upcoming rides (next 14 days), sorted by date.</li>
+        <li class="done">FR-2.2 — Ride card: date/time, title, start point, route preview image (when GPX available), pace badges with per-pace RSVP counts, weather pill (icon + temp + wind chip when ≥ 20 km/h), recurring tag.</li>
+        <li class="done">FR-2.4 — Detail page: description, embedded read-only map with start pin and GPX polyline overlay, route URL, GPX download, full RSVP list per pace, leader credit, full weather block (icon, temp, wind, precip%, sunrise/sunset).</li>
+        <li class="done">FR-2.5 — One-off and recurring rides (weekly / biweekly).</li>
+        <li class="done">FR-2.6 — Statuses: <code>scheduled</code>, <code>weather-watch</code>, <code>cancelled</code>, <code>completed</code>. Per-pace cancellation is also supported.</li>
+        <li class="todo">FR-2.3 — UI filters by pace and date range <span class="chip chip-planned">Planned</span></li>
+      </ul>
+      <div class="ac"><b>Acceptance:</b> A member finds and RSVPs to the next matching ride in ≤ 3 taps from /rides. ✅</div>
+    </div>
+
+    <div class="fr partial">
+      <h4><span class="id">FR-3</span> RSVP System <span class="chip chip-partial">Partial</span></h4>
+      <ul>
+        <li class="done">FR-3.1 — One-tap RSVP / withdraw. Switching between paces is an atomic upsert (one rider per ride enforced at PK level).</li>
+        <li class="done">FR-3.4 — Per-pace cap visible (e.g. "12/15 spots") on the ride detail page.</li>
+        <li class="done">FR-3.5 — A member sees their own pace highlighted on every ride detail page; RSVPs to past and future rides are queryable per user.</li>
+        <li class="todo">FR-3.2 / FR-3.3 — Over-cap waitlist with FIFO promotion <span class="chip chip-deferred">Deferred</span> — current behaviour: cap is informational only; admins manually intervene if a pace is full.</li>
+        <li class="todo">FR-3.6 — RSVP cutoff time editable by leader <span class="chip chip-deferred">Deferred</span> — current behaviour: RSVP open until ride start time.</li>
+      </ul>
+      <div class="ac"><b>Acceptance:</b> RSVP state syncs across devices on next page load (no realtime channel; <code>force-dynamic</code> rendering). ✅ for the core path.</div>
+    </div>
+
+    <div class="fr done">
+      <h4><span class="id">FR-4</span> Member Profiles &amp; Directory <span class="chip chip-done">Done</span></h4>
+      <ul>
+        <li class="done">FR-4.1 — Profile fields: photo, name, pace group, bike, Strava handle, bio, role badge.</li>
+        <li class="done">FR-4.2 — Emergency contact (name + phone) lives in a separate <code>users_private</code> table, only joined in admin / leader paths. Visible to ride leaders &amp; admins on the detail page of rides the member has RSVP'd to. Cross-pace leaders on the same ride can see all riders' contacts (safety).</li>
+        <li class="done">FR-4.3 — Searchable directory at <code>/members</code> with name/bike search and per-pace filter pills. Hidden-from-directory members are excluded from listing but their profile URL still works.</li>
+        <li class="done">FR-4.4 — Privacy toggle: "Hide from directory" on the profile edit form.</li>
+        <li class="done">FR-4.5 — Rider names in any ride's RSVP list are clickable links to <code>/members/[id]</code>.</li>
+      </ul>
+      <div class="ac"><b>Acceptance:</b> Emergency contact never appears in any non-leader/non-admin code path. Verified by audit of every usage of <code>users_private</code>.</div>
+    </div>
+
+    <div class="fr done">
+      <h4><span class="id">FR-5</span> Ride Leader Tools <span class="chip chip-done">Done</span></h4>
+      <ul>
+        <li class="done">FR-5.1 — Create / edit ride form: title, datetime, start point with map-tap picker, distance, elevation, route URL, description, multiple pace groups (each with own leader / cap / overrides / notes).</li>
+        <li class="done">FR-5.2 — Cancel ride OR cancel single pace group with mandatory reason. All-pace cancellation auto-cancels the parent ride. Recurring series spawn the next occurrence on cancel so the rides list stays populated.</li>
+        <li class="done">FR-5.3 — RSVP list with emergency contacts visible to managers across all paces of the ride.</li>
+        <li class="done">FR-5.4 — GPX upload at create/edit time. Server parses distance + elevation (Haversine + summed positive deltas with 0.5m noise threshold) and overwrites form values; saves the raw file; generates a static OSM-tile preview image for the rides list.</li>
+        <li class="done">FR-5.5 — Recurring series (weekly / biweekly) created in one form. <strong>Lazy materialisation</strong>: only one live future occurrence per series exists at any time; the next is spawned by cron / on-cancel.</li>
+        <li class="todo">FR-5.6 — Per-ride announcements / pinned notes <span class="chip chip-planned">Planned</span></li>
+      </ul>
+      <div class="ac"><b>Acceptance:</b> A leader creates a recurring Saturday series with three paces in under 2 minutes. ✅</div>
+    </div>
+
+    <div class="fr planned">
+      <h4><span class="id">FR-6</span> Announcements <span class="chip chip-planned">Planned (Phase 1)</span></h4>
+      <ul>
+        <li class="todo">FR-6.1 — Club-wide pinned announcement banner on /rides.</li>
+        <li class="todo">FR-6.2 — Admin / leader posts; members see plain text + optional link.</li>
+        <li class="todo">FR-6.3 — Reactions (👍❤️) deferred — keep V1 simple.</li>
+      </ul>
+      <div class="note"><b>Status:</b> The <code>content_blocks</code> CMS already supports admin-edited blocks for the public landing page. An "announcements" block on /rides is a small extension. Not yet built.</div>
+    </div>
+
+    <div class="fr planned">
+      <h4><span class="id">FR-7</span> Notifications <span class="chip chip-planned">Planned (Phase 1)</span></h4>
+      <ul>
+        <li class="done">FR-7.1 — Email on member status changes (approved, rejected, access removed) — already wired via SMTP.</li>
+        <li class="todo">FR-7.2 — Email reminder 24h before a ride a member has RSVP'd to.</li>
+        <li class="todo">FR-7.3 — Email on ride cancellation to all RSVP'd riders.</li>
+        <li class="todo">FR-7.4 — Web push (opt-in) — possible but requires VAPID + service-worker plumbing; tradeoff worth discussing before building.</li>
+      </ul>
+      <div class="note"><b>Tradeoff:</b> Web push is high effort for a small club. Email reminders solve 80% of the value at 20% of the work. Recommend ride-cancellation email first, then 24h reminders, then revisit push.</div>
+    </div>
+
+    <h3 style="margin-top: 40px;">5.2 Implemented features beyond the V0.1 spec</h3>
+    <p>These shipped during Phase 1 and weren't in the original document:</p>
+
+    <div class="fr done">
+      <h4><span class="id">FR-A</span> Multi-pace rides <span class="chip chip-done">Done</span></h4>
+      <ul>
+        <li class="done">A single ride can offer A + B + C (or any subset of <code>ride_types</code>) as separate pace groups. Each has its own leader, cap, distance/elevation overrides, notes, and per-pace status (scheduled / cancelled).</li>
+        <li class="done">One rider per ride enforced at PK level. Switching pace = upsert. Per-pace cancellation supported; if all paces cancel the ride auto-cancels.</li>
+      </ul>
+    </div>
+
+    <div class="fr done">
+      <h4><span class="id">FR-B</span> Editable ride types <span class="chip chip-done">Done</span></h4>
+      <ul>
+        <li class="done">Replaces the hardcoded A/B/C enum with an admin-editable <code>ride_types</code> table: code, name, description, color preset, position, active.</li>
+        <li class="done">Admin can add new pace types, rename, change colour, or deactivate at <code>/admin/types</code>. UI tone presets are defined in <code>src/lib/ride-types.ts</code> with literal Tailwind class strings (build-time-discoverable).</li>
+      </ul>
+    </div>
+
+    <div class="fr done">
+      <h4><span class="id">FR-C</span> Maps + GPX overlay <span class="chip chip-done">Done</span></h4>
+      <ul>
+        <li class="done">Leaflet + OSM tiles, no third-party API. Touchpad / two-finger zoom enabled. OSM attribution always visible.</li>
+        <li class="done">Admin ride form: tap-to-set start point, fills lat/lng inputs.</li>
+        <li class="done">Ride detail page: read-only map with start pin and dark-blue (<code>#1e40af</code>) GPX polyline overlay when a route file exists. Auto-fits bounds to the polyline.</li>
+        <li class="done">Members can download the GPX file with a slugified filename (e.g. <code>saturday-bunch-east-coast.gpx</code>).</li>
+      </ul>
+    </div>
+
+    <div class="fr done">
+      <h4><span class="id">FR-D</span> Static route preview images <span class="chip chip-done">Done</span></h4>
+      <ul>
+        <li class="done">On GPX upload, server stitches OSM tiles using <code>sharp</code> and overlays the route as an SVG polyline, saving a 1024×512 JPEG preview at <code>/uploads/routes/&lt;rideId&gt;-preview.jpg</code>.</li>
+        <li class="done">Used as the cover image on the rides list. Best-effort: failure never blocks the save.</li>
+      </ul>
+    </div>
+
+    <div class="fr done">
+      <h4><span class="id">FR-E</span> Weather forecasts <span class="chip chip-done">Done</span></h4>
+      <ul>
+        <li class="done">Open-Meteo (free, no API key, 16-day horizon). Cached via Next.js fetch <code>revalidate: 3600</code> so 14 list cards don't hammer the API.</li>
+        <li class="done">List cards: WMO emoji + temp + wind chip (when ≥ 20 km/h).</li>
+        <li class="done">Detail page: full forecast block (icon, label, temp, wind coloured red if windy, precip %, sunrise / sunset in location-local time).</li>
+      </ul>
+    </div>
+
+    <div class="fr done">
+      <h4><span class="id">FR-F</span> Content + Gallery CMS <span class="chip chip-done">Done</span></h4>
+      <ul>
+        <li class="done"><code>/admin/content</code> — admin edits "About" and "Achievements" blocks shown on the public landing page.</li>
+        <li class="done"><code>/admin/gallery</code> — admin uploads / deletes / edits alt text for landing-page carousel photos. Resized to 1024×1024 JPEG via sharp on upload.</li>
+      </ul>
+    </div>
+
+    <div class="fr done">
+      <h4><span class="id">FR-G</span> Member terms acceptance <span class="chip chip-done">Done</span></h4>
+      <ul>
+        <li class="done">A KHCC-specific 13-section member agreement (account responsibilities, data handling, cycling-risk waiver, conduct, content licence, account closure) at <code>/terms</code>.</li>
+        <li class="done">Required checkbox + Continue gate before onboarding. <code>users.accepted_terms_at</code> stamped on submit; existing users prompted on next visit.</li>
+        <li class="done">Re-readable any time via "View member agreement" link in /profile.</li>
+      </ul>
+    </div>
+
+    <h3 style="margin-top: 40px;">5.3 Phase 2 <span class="chip chip-phase2">Phase 2</span></h3>
+
+    <div class="fr deferred">
+      <h4><span class="id">FR-8</span> Overseas Trips <span class="chip chip-deferred">Deferred</span></h4>
+      <p>Trip page (title, dates, itinerary, cost), signup flow (Interested → Deposit Paid → Confirmed → Cancelled), roommate prefs, document vault, post-trip gallery. <strong>Not started.</strong> Out of scope for current implementation; revisit when Mei's persona becomes a priority.</p>
+    </div>
+
+    <div class="fr deferred">
+      <h4><span class="id">FR-9</span> Strava Integration <span class="chip chip-deferred">Deferred</span></h4>
+      <p>OAuth connect, auto-import, weekly mileage leaderboard, KOM/QOM shoutouts. <strong>Not started.</strong> Members can already share their Strava handle on their profile (deep-links to strava.com/athletes/&lt;handle&gt;) — that's the V1 substitute.</p>
+    </div>
+
+    <h3 style="margin-top: 40px;">5.4 Phase 3 <span class="chip chip-phase3">Phase 3</span></h3>
+
+    <div class="fr deferred">
+      <h4><span class="id">FR-10</span> Race Calendar <span class="chip chip-deferred">Deferred</span></h4>
+    </div>
+    <div class="fr deferred">
+      <h4><span class="id">FR-11</span> Season Leaderboard <span class="chip chip-deferred">Deferred</span></h4>
+    </div>
+    <div class="fr deferred">
+      <h4><span class="id">FR-12</span> Live Ride Safety (check-in / overdue alert) <span class="chip chip-deferred">Deferred</span></h4>
+      <p>Explicit non-goal: KHCC has decided not to run live tracking — it changes the privacy posture of the site significantly.</p>
+    </div>
+    <div class="fr deferred">
+      <h4><span class="id">FR-13</span> Incident Reporting <span class="chip chip-deferred">Deferred</span></h4>
+    </div>
+    <div class="fr deferred">
+      <h4><span class="id">FR-14</span> Club Stats Dashboard <span class="chip chip-deferred">Deferred</span></h4>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section id="s6">
+    <h2><span class="num">06</span>Non-Functional Requirements</h2>
+
+    <h3>6.1 Performance</h3>
+    <ul>
+      <li><strong>NFR-1</strong> — FCP ≤ 1.5s on 4G, ≤ 3s on 3G. <span class="chip chip-done">Met</span> (static landing + small RSC payloads).</li>
+      <li><strong>NFR-2</strong> — TTI ≤ 3s on mid-range Android. <span class="chip chip-done">Met</span></li>
+      <li><strong>NFR-3</strong> — Server actions p95 ≤ 800ms. <span class="chip chip-done">Met</span> in normal use; cleanup/migrate operations are slower but rare.</li>
+    </ul>
+
+    <h3>6.2 Accessibility</h3>
+    <ul>
+      <li><strong>NFR-4</strong> — WCAG 2.1 AA target. <span class="chip chip-partial">Partial</span> — semantic HTML throughout, but no formal audit yet.</li>
+      <li><strong>NFR-5</strong> — Min tap target 44×44pt (gloves!). <span class="chip chip-done">Met</span> (<code>button { min-height: 44px }</code> in globals).</li>
+      <li><strong>NFR-6</strong> — Pace group never colour-only — always shows the letter inside the hex badge. <span class="chip chip-done">Met</span></li>
+      <li><strong>NFR-7</strong> — Respect <code>prefers-reduced-motion</code>. <span class="chip chip-partial">Partial</span></li>
+    </ul>
+
+    <h3>6.3 Responsive &amp; Device Support</h3>
+    <ul>
+      <li><strong>NFR-8</strong> — Mobile-first; designs target 375px min width. <span class="chip chip-done">Met</span></li>
+      <li><strong>NFR-9</strong> — iOS Safari 16+, Chrome 110+, Firefox 110+, Edge 110+. <span class="chip chip-done">Met</span></li>
+      <li><strong>NFR-10</strong> — PWA: installable, offline cache for upcoming rides. <span class="chip chip-partial">Partial</span> — installable + service worker via <code>@ducanh2912/next-pwa</code>; offline cache scope is conservative.</li>
+    </ul>
+
+    <h3>6.4 Security &amp; Privacy</h3>
+    <ul>
+      <li><strong>NFR-11</strong> — HTTPS / TLS 1.2+ only. <span class="chip chip-done">Met</span> via Cloudflare Tunnel.</li>
+      <li><strong>NFR-12</strong> — Auth.js JWT sessions; no plaintext passwords (no passwords at all — Google OAuth or email-credential).</li>
+      <li><strong>NFR-13</strong> — <strong>No Postgres RLS.</strong> Authorisation is application-level via auth helpers. Emergency contact in a separate table that is only joined in admin / leader paths. Rationale: simpler and auditable for a single-app schema.</li>
+      <li><strong>NFR-14</strong> — PDPA-aligned: data export and deletion supported via admin action.</li>
+      <li><strong>NFR-15</strong> — No Strava tokens stored (integration deferred).</li>
+      <li><strong>NFR-16</strong> — Audit columns on rides (cancelled_at / cancelled_by / cancelled_reason) and on member status transitions. Full audit log table not yet built.</li>
+    </ul>
+
+    <h3>6.5 Reliability</h3>
+    <ul>
+      <li><strong>NFR-17</strong> — Uptime target 99.5% (excl. planned maintenance). <span class="chip chip-planned">Pending live data</span></li>
+      <li><strong>NFR-18</strong> — Daily DB backups, 30-day retention. <span class="chip chip-planned">Planned</span> — <strong>not yet automated</strong>; this is the highest-priority operational gap. Current state: docker volume only, single-host risk.</li>
+      <li><strong>NFR-19</strong> — Graceful degradation when Open-Meteo / OSM tiles unavailable. <span class="chip chip-done">Met</span> — forecast UI hides on null, map shows pin-only without tiles.</li>
+    </ul>
+
+    <h3>6.6 Internationalisation</h3>
+    <ul>
+      <li><strong>NFR-20</strong> — English at launch. i18n-ready pattern not yet adopted (hardcoded strings).</li>
+      <li><strong>NFR-21</strong> — Dates rendered in browser locale; stored as <code>timestamp with time zone</code>.</li>
+      <li><strong>NFR-22</strong> — Metric units throughout. Imperial toggle deferred to Phase 3.</li>
+    </ul>
+
+    <h3>6.7 Maintainability</h3>
+    <ul>
+      <li><strong>NFR-23</strong> — TypeScript strict mode. <span class="chip chip-done">Met</span></li>
+      <li><strong>NFR-24</strong> — Unit test coverage ≥ 60% on core domain. <span class="chip chip-deferred">Not met</span> — <strong>no test suite yet</strong>. Rely on tsc + lint + manual verification. Next priority alongside backups.</li>
+      <li><strong>NFR-25</strong> — All commits pass <code>npm run lint</code> + <code>npm run typecheck</code>. <span class="chip chip-done">Met</span> (no CI yet — runs locally before deploy).</li>
+    </ul>
+  </section>
+
+  <!-- 7 -->
+  <section id="s7">
+    <h2><span class="num">07</span>Data Model</h2>
+    <p>11 tables — full schema in <code>src/db/schema.ts</code>. Drizzle ORM, migrations in <code>drizzle/</code>.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Table</th><th>Key fields</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td><code>users</code></td><td>id, email, name, image, role, status, accepted_terms_at, onboarded_at, paceGroup, bike, strava_handle, bio, hide_from_directory</td><td>Auth.js managed; KHCC fields layered on top.</td></tr>
+          <tr><td><code>users_private</code></td><td>user_id (PK), emergency_contact_name, emergency_contact_phone</td><td>Separate so no <code>users</code> select can leak it.</td></tr>
+          <tr><td><code>accounts</code></td><td>userId, provider, providerAccountId, tokens</td><td>Auth.js adapter table.</td></tr>
+          <tr><td><code>verificationTokens</code></td><td>identifier, token, expires</td><td>Auth.js adapter table.</td></tr>
+          <tr><td><code>ride_types</code></td><td>code (PK), name, description, color, position, active</td><td>Editable pace catalogue. Replaces the old A/B/C enum.</td></tr>
+          <tr><td><code>ride_series</code></td><td>id, title, rule (weekly | biweekly), weekday, time_of_day, start_point, defaults, pace_groups_template (JSON), active</td><td>Recurring template; <strong>lazy-materialised</strong>.</td></tr>
+          <tr><td><code>rides</code></td><td>id, title, starts_at (tz), start_point (lat/lng + name), distance_km, elevation_m, route_url, description, series_id, status, cancellation audit columns</td><td>One ride = one event header, multiple pace groups.</td></tr>
+          <tr><td><code>ride_pace_groups</code></td><td>id, ride_id, pace_code FK→ride_types, leader_id, cap, distance/elevation overrides, notes, position, status, cancellation audit</td><td>Per-pace details. Unique on (ride_id, pace_code).</td></tr>
+          <tr><td><code>ride_rsvps</code></td><td>(ride_id, user_id) PK, pace_group_id FK, status</td><td>One rider, one pace per ride. Pace switch = upsert.</td></tr>
+          <tr><td><code>content_blocks</code></td><td>key (PK), title, body, updated_by, updated_at</td><td>Landing-page CMS (about, achievements).</td></tr>
+          <tr><td><code>gallery_photos</code></td><td>id, file_url, alt, position, uploaded_by, uploaded_at</td><td>Landing-page carousel.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section id="s8">
+    <h2><span class="num">08</span>Tech Stack</h2>
+    <p>Fully self-hosted on a home server behind Cloudflare Tunnel. Zero managed dependencies beyond Google OAuth at sign-in time and Open-Meteo for weather.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Layer</th><th>Choice</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Framework</td><td>Next.js 15 (App Router) + TypeScript strict</td><td>Server Components + Server Actions throughout.</td></tr>
+          <tr><td>UI</td><td>Tailwind CSS v4 (<code>@theme</code> tokens) + custom components</td><td>No component library — all primitives written in-repo.</td></tr>
+          <tr><td>Database</td><td>Postgres 16 (Docker) + Drizzle ORM + drizzle-kit</td><td>Migrations applied automatically by container entrypoint at boot.</td></tr>
+          <tr><td>Auth</td><td>Auth.js v5 + Drizzle adapter</td><td>Google OAuth + email-credentials. JWT sessions.</td></tr>
+          <tr><td>Maps</td><td>Leaflet + OpenStreetMap tiles</td><td>Read-only on detail page; tap-to-pin on admin form.</td></tr>
+          <tr><td>Static map preview</td><td>OSM tile fetch + <code>sharp</code> composite + SVG polyline overlay</td><td>Server-side, on GPX upload.</td></tr>
+          <tr><td>Image processing</td><td><code>sharp</code></td><td>Avatars 512×512, gallery 1024×1024 JPEG.</td></tr>
+          <tr><td>Email</td><td>Nodemailer over Gmail SMTP (app password)</td><td>Approval / rejection / access-removed mails.</td></tr>
+          <tr><td>Weather</td><td>Open-Meteo (no key, no signup)</td><td>1h <code>fetch revalidate</code> cache.</td></tr>
+          <tr><td>PWA</td><td><code>@ducanh2912/next-pwa</code></td><td>Installable, conservative offline cache.</td></tr>
+          <tr><td>Hosting</td><td>Home server, Docker Compose, behind nginx-gateway → Cloudflare Tunnel</td><td>External network <code>server-net</code> shared with sibling projects.</td></tr>
+          <tr><td>CI / CD</td><td>None — <code>./scripts/deploy.sh</code> on the server pulls and rebuilds</td><td>Local <code>tsc</code> + lint before push is the gate.</td></tr>
+          <tr><td>Cron</td><td>Host crontab → HTTPS endpoint with shared secret</td><td>Materialises next ride per series.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout warn">
+      <strong>What we explicitly didn't pick:</strong> Supabase, Vercel, Resend, Mapbox, Clerk, Auth0, Firebase, PostHog. Self-hosted is a deliberate product decision — every dependency is replaceable, every byte is on hardware we control.
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section id="s9">
+    <h2><span class="num">09</span>Release Status</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Milestone</th><th>Status</th><th>Includes</th></tr></thead>
+        <tbody>
+          <tr><td><strong>M1 — Phase 1 MVP</strong> <span class="chip chip-phase1">P1</span></td><td><span class="chip chip-done">Shipped</span></td><td>FR-1 to FR-5, plus FR-A through FR-G (multi-pace, types, maps, GPX, weather, CMS, terms).</td></tr>
+          <tr><td><strong>M2 — Phase 1 polish</strong></td><td><span class="chip chip-planned">Next</span></td><td>FR-6 (announcements), FR-7 (email reminders), FR-3.2 (waitlist), automated DB backups, basic test suite.</td></tr>
+          <tr><td><strong>M3 — Phase 2</strong> <span class="chip chip-phase2">P2</span></td><td><span class="chip chip-deferred">Deferred</span></td><td>FR-8 (Trips), FR-9 (Strava). Revisit when there's pull from members.</td></tr>
+          <tr><td><strong>M4 — Phase 3</strong> <span class="chip chip-phase3">P3</span></td><td><span class="chip chip-deferred">Deferred</span></td><td>FR-10 to FR-14 (Racing, Stats). Some items (FR-12 Live Safety) explicitly out of scope on privacy grounds.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>Recommended next batch (in priority order)</h3>
+    <ol>
+      <li><strong>Automated daily Postgres backups</strong> + uploads tarball to off-box storage. Highest-impact operational gap; one cron + one script.</li>
+      <li><strong>Email reminder pipeline</strong> — 24h before a ride, on cancellation. Reuses the existing SMTP wiring.</li>
+      <li><strong>Announcements block</strong> on /rides — small extension of the existing <code>content_blocks</code> CMS.</li>
+      <li><strong>Tests</strong> on the auth helpers + multi-pace RSVP upsert + GPX parser. Vitest.</li>
+      <li><strong>Waitlist</strong> with FIFO promotion when an over-cap pace gets a withdrawal.</li>
+    </ol>
+  </section>
+
+  <!-- 10 -->
+  <section id="s10">
+    <h2><span class="num">10</span>Risks &amp; Mitigations</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Risk</th><th>Severity</th><th>Mitigation</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>No automated backups</strong> — single-host Postgres volume, no off-box copy.</td>
+            <td><span class="sev sev-h">High</span></td>
+            <td>Build the daily <code>pg_dump</code> + <code>tar uploads/</code> + rsync-to-off-box cron next.</td>
+          </tr>
+          <tr>
+            <td><strong>No test suite</strong> — regressions caught by manual click-through.</td>
+            <td><span class="sev sev-m">Medium</span></td>
+            <td>Add Vitest for the small set of pure logic (GPX parse, lazy materialiser, auth helpers). End-to-end can wait.</td>
+          </tr>
+          <tr>
+            <td><strong>Single home server</strong> — power / network outage takes the site down.</td>
+            <td><span class="sev sev-m">Medium</span></td>
+            <td>Acceptable for a club tool; monitor uptime, document a 30-min cold-restore procedure.</td>
+          </tr>
+          <tr>
+            <td><strong>Open-Meteo / OSM dependency</strong> — third-party free services could throttle or fold.</td>
+            <td><span class="sev sev-l">Low</span></td>
+            <td>Both are graceful-degraded already (forecast hides, tiles fail loud but page works). Both have alternatives if needed.</td>
+          </tr>
+          <tr>
+            <td><strong>Rate-limit self-DoS</strong> on admin pages with thousands of rows.</td>
+            <td><span class="sev sev-l">Low</span> (mitigated)</td>
+            <td>Hit during the recurring-rides bug; fixed by trimming admin queries to recent + future and disabling RSC prefetch on edit links.</td>
+          </tr>
+          <tr>
+            <td><strong>Bus factor of one</strong> — single maintainer.</td>
+            <td><span class="sev sev-m">Medium</span></td>
+            <td>Document deployment + restore in <code>CLAUDE.md</code> / runbook. Recruit a second admin.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section id="s11">
+    <h2><span class="num">11</span>Open Questions</h2>
+    <ul>
+      <li>Should we ship <strong>email reminders</strong> before push notifications? (Recommendation: yes — covers 80% of value at much lower effort.)</li>
+      <li>Do we need a real <strong>audit log</strong> table beyond the per-row audit columns we already have? (Recommend: only when admin actions become contentious.)</li>
+      <li>Should the directory be opt-<em>in</em> instead of opt-<em>out</em>? (Currently opt-out via <code>hide_from_directory</code>.)</li>
+      <li>What's the backup destination — another box on the home network, an S3-compatible object store, or rclone-to-cloud?</li>
+      <li>Where do we draw the line on <strong>Phase 2 trips</strong>? Is the trip-organiser role used at all without that feature, or rename / collapse it into Leader?</li>
+    </ul>
+  </section>
+
+  <!-- 12 -->
+  <section id="s12">
+    <h2><span class="num">12</span>Appendix</h2>
+
+    <h3>12.1 Resolved questions from V0.1</h3>
+    <ul>
+      <li><strong>Q1 — Auth providers</strong>: Google + email-credentials. Apple deferred indefinitely (no iOS app, no clear pull).</li>
+      <li><strong>Q2 — Club name expansion</strong>: Knock House Chop Chop.</li>
+      <li><strong>Q3 — Pace types</strong>: admin-editable; A/B/C are the seeded defaults but not hardcoded.</li>
+      <li><strong>Q4 — Backend</strong>: self-hosted Postgres + Auth.js. Explicit non-goal: managed services.</li>
+    </ul>
+
+    <h3>12.2 Glossary</h3>
+    <ul>
+      <li><strong>Pace group</strong> — a single tempo / difficulty bucket attached to a ride (e.g. A = fast, B = mid, C = no-drop). Each ride can offer one or more.</li>
+      <li><strong>Series</strong> — a recurring ride template (weekly / biweekly). Materialises into actual ride rows lazily — only the next occurrence exists at any time.</li>
+      <li><strong>Materialise</strong> — the act of inserting concrete <code>rides</code> rows from a series template.</li>
+      <li><strong>RSVP</strong> — a member's commitment to a specific pace on a specific ride. One per (rider, ride).</li>
+      <li><strong>Hide from directory</strong> — opt-out of the <code>/members</code> listing. Profile URL still works for anyone who has the link or arrives via an RSVP click.</li>
+    </ul>
+
+    <h3>12.3 Reference docs in the repo</h3>
+    <ul>
+      <li><code>CLAUDE.md</code> — operating guide for any future contributor (or AI assistant).</li>
+      <li><code>docs/REQUIREMENTS.md</code> — original V0.1 requirements (markdown).</li>
+      <li><code>docs/STAGE1.md</code> — Phase 1 implementation notes.</li>
+      <li><code>src/lib/terms.ts</code> — current member agreement text.</li>
+      <li><code>src/db/schema.ts</code> — authoritative schema.</li>
+    </ul>
+  </section>
+
+  <footer>
+    KHCC Web V2.0 — implementation snapshot, 18 May 2026. Living document; bump version on material change.
+  </footer>
+
+</div>
+</body>
+</html>
