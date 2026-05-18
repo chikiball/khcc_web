@@ -18,16 +18,29 @@ export function RideCard({
   rsvpCount,
   isIn,
   rideType,
+  previewUrl,
 }: {
   ride: Ride;
   rsvpCount: number;
   isIn: boolean;
   rideType?: RideTypeOption;
+  previewUrl?: string | null;
 }) {
   const start = new Date(ride.starts_at);
 
   return (
     <article className="rounded-2xl bg-white ring-1 ring-maroon-200/60 overflow-hidden shadow-sm">
+      {previewUrl && (
+        <Link href={`/rides/${ride.id}`} className="block relative aspect-[2/1] bg-cream-100">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={previewUrl}
+            alt=""
+            loading="lazy"
+            className="absolute inset-0 size-full object-cover"
+          />
+        </Link>
+      )}
       <Link href={`/rides/${ride.id}`} className="block p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">

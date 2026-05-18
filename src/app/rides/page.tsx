@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { stat } from "node:fs/promises";
+import path from "node:path";
 import { db, schema } from "@/db";
 import { canManageRides, requireApproved } from "@/lib/auth-helpers";
 import { RideCard } from "@/components/ride-card";
@@ -7,6 +9,22 @@ import { and, asc, eq, gte, inArray, lte, ne } from "drizzle-orm";
 
 export const metadata = { title: "Rides" };
 export const dynamic = "force-dynamic";
+
+async function findPreview(rideId: string): Promise<string | null> {
+  const filePath = path.join(
+    process.cwd(),
+    "public",
+    "uploads",
+    "routes",
+    `${rideId}-preview.jpg`,
+  );
+  try {
+    const s = await stat(filePath);
+    return s.isFile() ? `/uploads/routes/${rideId}-preview.jpg` : null;
+  } catch {
+    return null;
+  }
+}
 
 export default async function RidesPage() {
   const user = await requireApproved();
@@ -63,6 +81,13 @@ export default async function RidesPage() {
     counts.set(row.rideId, (counts.get(row.rideId) ?? 0) + 1);
     if (row.userId === user.id) myRsvps.add(row.rideId);
   }
+
+  // Look up preview-image existence per ride. Tiny fs.stat calls in
+  // parallel; trivially fast even for the full 14-day window.
+  const previewEntries = await Promise.all(
+    rides.map(async (r) => [r.id, await findPreview(r.id)] as const),
+  );
+  const previewByRide = new Map(previewEntries);
 
   const firstName = (user.name ?? "rider").split(" ")[0];
 
@@ -127,6 +152,7 @@ export default async function RidesPage() {
             rsvpCount={counts.get(ride.id) ?? 0}
             isIn={myRsvps.has(ride.id)}
             rideType={typeByCode.get(ride.pace_group)}
+            previewUrl={previewByRide.get(ride.id) ?? null}
           />
         ))}
       </section>

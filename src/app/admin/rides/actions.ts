@@ -2,8 +2,9 @@
 
 import { db, schema } from "@/db";
 import { requireRideManager } from "@/lib/auth-helpers";
-import { parseGpx } from "@/lib/gpx";
+import { parseGpx, parseGpxCoords } from "@/lib/gpx";
 import { saveRouteGpx } from "@/lib/upload";
+import { generateRoutePreview } from "@/lib/static-map";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
@@ -79,12 +80,13 @@ function toRow(input: RideInput) {
  * the manual fields are pre-filled from the previous values, so an "only
  * fill if empty" rule meant the upload silently did nothing.
  *
- * Returns the File so the caller can persist it once the ride id exists.
+ * Returns the parsed XML text alongside the File so the caller can persist
+ * the file AND reuse the text for static-map generation without re-reading.
  */
 async function maybeMergeGpx(
   formData: FormData,
   input: RideInput,
-): Promise<File | null> {
+): Promise<{ file: File; text: string } | null> {
   const file = formData.get("gpx");
   if (!(file instanceof File) || file.size === 0) return null;
   if (!file.name.toLowerCase().endsWith(".gpx")) {
@@ -100,21 +102,41 @@ async function maybeMergeGpx(
   input.distance_km = String(parsed.distanceKm);
   input.elevation_m = String(parsed.elevationM);
 
-  return file;
+  return { file, text };
+}
+
+/**
+ * Best-effort static preview generation. Failure (OSM tile timeout,
+ * sharp issue, anything) is logged but never blocks the ride save —
+ * the preview is nice-to-have for the rides list, not critical.
+ */
+async function tryGeneratePreview(text: string, rideId: string): Promise<void> {
+  try {
+    const coords = parseGpxCoords(text);
+    await generateRoutePreview(coords, rideId);
+  } catch (err) {
+    console.error(
+      "[route preview] generation failed:",
+      err instanceof Error ? err.message : err,
+    );
+  }
 }
 
 export async function createRide(formData: FormData) {
   // Re-check role at action time — never trust the client.
   await requireRideManager();
   const input = parseRideInput(formData);
-  const gpxFile = await maybeMergeGpx(formData, input);
+  const gpx = await maybeMergeGpx(formData, input);
 
   const [created] = await db
     .insert(schema.rides)
     .values(toRow(input))
     .returning({ id: schema.rides.id });
 
-  if (gpxFile) await saveRouteGpx(gpxFile, created.id);
+  if (gpx) {
+    await saveRouteGpx(gpx.file, created.id);
+    await tryGeneratePreview(gpx.text, created.id);
+  }
 
   revalidatePath("/rides");
   revalidatePath("/admin/rides");
@@ -124,14 +146,17 @@ export async function createRide(formData: FormData) {
 export async function updateRide(rideId: string, formData: FormData) {
   await requireRideManager();
   const input = parseRideInput(formData);
-  const gpxFile = await maybeMergeGpx(formData, input);
+  const gpx = await maybeMergeGpx(formData, input);
 
   await db
     .update(schema.rides)
     .set({ ...toRow(input), updatedAt: new Date() })
     .where(eq(schema.rides.id, rideId));
 
-  if (gpxFile) await saveRouteGpx(gpxFile, rideId);
+  if (gpx) {
+    await saveRouteGpx(gpx.file, rideId);
+    await tryGeneratePreview(gpx.text, rideId);
+  }
 
   revalidatePath("/rides");
   revalidatePath(`/rides/${rideId}`);
