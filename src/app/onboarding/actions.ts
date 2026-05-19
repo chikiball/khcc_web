@@ -6,21 +6,28 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 
-const PACE = ["A", "B", "C"] as const;
-type Pace = (typeof PACE)[number];
-
 export async function completeOnboarding(formData: FormData) {
   const user = await requireUser();
 
   const display_name = String(formData.get("display_name") ?? "").trim();
-  const pace_group = String(formData.get("pace_group") ?? "B") as Pace;
+  const pace_group = String(formData.get("pace_group") ?? "").trim();
   const bike = String(formData.get("bike") ?? "").trim() || null;
   const strava_handle = String(formData.get("strava_handle") ?? "").trim() || null;
   const emergency_name = String(formData.get("emergency_name") ?? "").trim() || null;
   const emergency_phone = String(formData.get("emergency_phone") ?? "").trim() || null;
 
   if (!display_name) throw new Error("Display name is required.");
-  if (!PACE.includes(pace_group)) throw new Error("Pick a pace group.");
+  if (!pace_group) throw new Error("Pick a pace group.");
+
+  // Validate against the live ride_types catalogue — admin can add / rename
+  // / disable codes at any time, so the old hardcoded A/B/C enum here was
+  // rejecting any custom code.
+  const validCodes = await db
+    .select({ code: schema.rideTypes.code })
+    .from(schema.rideTypes);
+  if (!new Set(validCodes.map((r) => r.code)).has(pace_group)) {
+    throw new Error("That pace group is no longer available — pick another.");
+  }
 
   await db.transaction(async (tx) => {
     await tx

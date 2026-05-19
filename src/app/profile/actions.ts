@@ -7,14 +7,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 
-const PACE = ["A", "B", "C"] as const;
-type Pace = (typeof PACE)[number];
-
 export async function updateProfile(formData: FormData) {
   const user = await requireApproved();
 
   const name = String(formData.get("name") ?? "").trim();
-  const paceGroup = String(formData.get("pace_group") ?? "B") as Pace;
+  const paceGroup = String(formData.get("pace_group") ?? "").trim();
   const bike = String(formData.get("bike") ?? "").trim() || null;
   const stravaHandle = String(formData.get("strava_handle") ?? "").trim() || null;
   const bio = String(formData.get("bio") ?? "").trim() || null;
@@ -22,7 +19,19 @@ export async function updateProfile(formData: FormData) {
   const emergencyPhone = String(formData.get("emergency_phone") ?? "").trim() || null;
 
   if (!name) throw new Error("Display name is required.");
-  if (!PACE.includes(paceGroup)) throw new Error("Pick a pace group.");
+  if (!paceGroup) throw new Error("Pick a pace group.");
+
+  // Validate against the live ride_types catalogue, not a hardcoded
+  // A/B/C enum — admins can add / rename / disable codes at any time.
+  // Allow the user's current code even if deactivated (matches the form,
+  // which still renders it as a selectable option until they pick a new one).
+  const validCodes = await db
+    .select({ code: schema.rideTypes.code })
+    .from(schema.rideTypes);
+  const allowed = new Set(validCodes.map((r) => r.code));
+  if (!allowed.has(paceGroup)) {
+    throw new Error("That pace group is no longer available — pick another.");
+  }
 
   // Image is optional. An empty File (zero bytes) means "no new upload".
   let newImage: string | null = null;

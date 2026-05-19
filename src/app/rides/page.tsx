@@ -102,12 +102,12 @@ export default async function RidesPage() {
         </div>
       </header>
 
-      <div className="px-5">
+      <div className="px-5 max-w-2xl mx-auto">
         <h1 className="font-display text-3xl font-bold mt-2">Next rides</h1>
         <p className="text-sm text-ink-soft mt-1">Hi {firstName} — here&apos;s the next 14 days.</p>
       </div>
 
-      <section className="px-5 mt-6 space-y-3 pb-16">
+      <section className="px-5 mt-6 space-y-3 pb-16 max-w-2xl mx-auto">
         {!rides.length && (
           <div className="rounded-2xl bg-white ring-1 ring-maroon-200/60 p-8 text-center">
             <p className="font-display text-lg text-ink">No rides scheduled.</p>
