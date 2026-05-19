@@ -122,7 +122,7 @@ export default async function ProfilePage({
                 return (
                   <label
                     key={t.code}
-                    className={`relative flex flex-col items-center justify-center rounded-2xl ring-1 ring-maroon-200 bg-white py-3 cursor-pointer has-[:checked]:${tone.bg.replace("/15", "/30")} has-[:checked]:${tone.text} has-[:checked]:${tone.ring} transition-colors`}
+                    className="relative flex flex-col items-center justify-center rounded-2xl ring-1 ring-maroon-200 bg-white py-3 cursor-pointer has-[:checked]:ring-2 has-[:checked]:ring-coral-500 has-[:checked]:bg-coral-50 has-[:checked]:shadow-sm transition-all"
                     title={t.name}
                   >
                     <input
@@ -130,10 +130,16 @@ export default async function ProfilePage({
                       name="pace_group"
                       value={t.code}
                       defaultChecked={(profile?.paceGroup ?? "B") === t.code}
-                      className="sr-only"
+                      className="sr-only peer"
                     />
-                    <span className="font-display font-bold text-xl">{t.code}</span>
+                    <span className={`font-display font-bold text-xl ${tone.text}`}>{t.code}</span>
                     <span className="text-[10px] mt-0.5 text-ink-soft">{t.name}</span>
+                    <span
+                      aria-hidden
+                      className="absolute top-1.5 right-1.5 size-4 rounded-full bg-coral-500 text-cream-50 text-[10px] font-bold leading-4 text-center opacity-0 peer-checked:opacity-100 transition-opacity"
+                    >
+                      ✓
+                    </span>
                   </label>
                 );
               })}
