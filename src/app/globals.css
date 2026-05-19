@@ -55,6 +55,145 @@ html, body {
   text-rendering: optimizeLegibility;
 }
 
+/* =========================================================================
+ * Theme overrides
+ * -------------------------------------------------------------------------
+ * The @theme block above defines the default "Coral" palette. Each block
+ * below remaps the SAME variable names to a different palette, activated
+ * by setting `data-theme="<key>"` on <html>. Picker lives at /admin/theme;
+ * registry of available themes is in src/lib/themes.ts.
+ *
+ * The CSS variables are referenced by every Tailwind utility (`bg-coral-500`
+ * resolves to `background-color: var(--color-coral-500)`), so swapping the
+ * data-theme attribute restyles the entire app instantly with no rebuild.
+ * ========================================================================= */
+
+[data-theme="bright"] {
+  /* Magenta replaces coral — "we went bright" jersey */
+  --color-coral-50:  #fdf2f8;
+  --color-coral-100: #fce7f3;
+  --color-coral-200: #fbcfe8;
+  --color-coral-300: #f9a8d4;
+  --color-coral-400: #f472b6;
+  --color-coral-500: #ec4899;
+  --color-coral-600: #db2777;
+  --color-coral-700: #be185d;
+  --color-coral-800: #9d174d;
+  --color-coral-900: #831843;
+
+  /* Dark teal replaces maroon for ink + deep accents */
+  --color-maroon-50:  #f0fdfa;
+  --color-maroon-100: #ccfbf1;
+  --color-maroon-200: #99f6e4;
+  --color-maroon-300: #5eead4;
+  --color-maroon-400: #2dd4bf;
+  --color-maroon-500: #14b8a6;
+  --color-maroon-600: #0d9488;
+  --color-maroon-700: #115e59;
+  --color-maroon-800: #134e4a;
+  --color-maroon-900: #042f2e;
+
+  /* Amber accent — for hot CTAs / wind warnings */
+  --color-flash-500: #f59e0b;
+  --color-flash-600: #d97706;
+
+  /* Pale yellow paper */
+  --color-cream-50:  #fffbeb;
+  --color-cream-100: #fef3c7;
+  --color-cream-200: #fde68a;
+  --color-cream-300: #fcd34d;
+
+  --color-brand: var(--color-coral-500);
+  --color-brand-strong: var(--color-coral-700);
+  --color-ink: var(--color-maroon-900);
+  --color-ink-soft: var(--color-maroon-700);
+  --color-paper: var(--color-cream-50);
+}
+
+[data-theme="sky"] {
+  /* Sky blue replaces coral */
+  --color-coral-50:  #f0f9ff;
+  --color-coral-100: #e0f2fe;
+  --color-coral-200: #bae6fd;
+  --color-coral-300: #7dd3fc;
+  --color-coral-400: #38bdf8;
+  --color-coral-500: #0ea5e9;
+  --color-coral-600: #0284c7;
+  --color-coral-700: #0369a1;
+  --color-coral-800: #075985;
+  --color-coral-900: #0c4a6e;
+
+  /* Deep navy replaces maroon */
+  --color-maroon-50:  #eff6ff;
+  --color-maroon-100: #dbeafe;
+  --color-maroon-200: #bfdbfe;
+  --color-maroon-300: #93c5fd;
+  --color-maroon-400: #60a5fa;
+  --color-maroon-500: #3b82f6;
+  --color-maroon-600: #2563eb;
+  --color-maroon-700: #1d4ed8;
+  --color-maroon-800: #1e3a8a;
+  --color-maroon-900: #172554;
+
+  /* Coral red accent — kept from the Cervelo frame */
+  --color-flash-500: #ff5b3f;
+  --color-flash-600: #e63f24;
+
+  /* Pale blue paper */
+  --color-cream-50:  #f8fbff;
+  --color-cream-100: #eef5fc;
+  --color-cream-200: #dde8f5;
+  --color-cream-300: #c4d5ec;
+
+  --color-brand: var(--color-coral-500);
+  --color-brand-strong: var(--color-coral-700);
+  --color-ink: var(--color-maroon-900);
+  --color-ink-soft: var(--color-maroon-700);
+  --color-paper: var(--color-cream-50);
+}
+
+[data-theme="mono"] {
+  /* Slate replaces coral */
+  --color-coral-50:  #f8fafc;
+  --color-coral-100: #f1f5f9;
+  --color-coral-200: #e2e8f0;
+  --color-coral-300: #cbd5e1;
+  --color-coral-400: #94a3b8;
+  --color-coral-500: #64748b;
+  --color-coral-600: #475569;
+  --color-coral-700: #334155;
+  --color-coral-800: #1e293b;
+  --color-coral-900: #0f172a;
+
+  /* Near-black slate for ink */
+  --color-maroon-50:  #f8fafc;
+  --color-maroon-100: #f1f5f9;
+  --color-maroon-200: #e2e8f0;
+  --color-maroon-300: #cbd5e1;
+  --color-maroon-400: #94a3b8;
+  --color-maroon-500: #475569;
+  --color-maroon-600: #334155;
+  --color-maroon-700: #1e293b;
+  --color-maroon-800: #0f172a;
+  --color-maroon-900: #020617;
+
+  /* Single red accent for hot states */
+  --color-flash-500: #dc2626;
+  --color-flash-600: #b91c1c;
+
+  /* Stone paper */
+  --color-cream-50:  #fafaf9;
+  --color-cream-100: #f5f5f4;
+  --color-cream-200: #e7e5e4;
+  --color-cream-300: #d6d3d1;
+
+  --color-brand: var(--color-coral-600);
+  --color-brand-strong: var(--color-coral-800);
+  --color-ink: var(--color-maroon-900);
+  --color-ink-soft: var(--color-maroon-700);
+  --color-paper: var(--color-cream-50);
+}
+
 /* Tap targets ≥ 44px (gloves) — REQUIREMENTS NFR-5 */
 button, a[role="button"], [data-tap] {
   min-height: 44px;
