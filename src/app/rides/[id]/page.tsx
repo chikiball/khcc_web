@@ -8,8 +8,10 @@ import { parseGpxCoords } from "@/lib/gpx";
 import { getRideForecast, weatherIcon, WIND_THRESHOLD_KPH } from "@/lib/weather";
 import { RideDetailMap } from "@/components/ride-detail-map";
 import { RsvpButton } from "@/components/rsvp-button";
+import { CopyRideButton } from "@/components/copy-ride-button";
 import { PaceBadge } from "@/components/ride-card";
 import { colorClasses } from "@/lib/ride-types";
+import { buildRideShareText } from "@/lib/share";
 import { and, asc, eq } from "drizzle-orm";
 
 type Params = Promise<{ id: string }>;
@@ -88,6 +90,23 @@ export default async function RideDetailPage({ params }: { params: Params }) {
   const start = new Date(ride.startsAt);
   const isCancelled = ride.status === "cancelled";
   const totalRiders = rsvps.length;
+
+  const shareText = buildRideShareText({
+    siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "https://burkam.nandharu.uk",
+    rideId: ride.id,
+    title: ride.title,
+    startsAt: start,
+    startPointName: ride.startPointName,
+    distanceKm: ride.distanceKm != null ? Number(ride.distanceKm) : null,
+    elevationM: ride.elevationM,
+    isCancelled,
+    paceGroups: paceGroups.map((pg) => ({
+      code: pg.paceCode,
+      name: typeByCode.get(pg.paceCode)?.name ?? pg.paceCode,
+      status: pg.status,
+      riders: (rsvpsByPace.get(pg.id) ?? []).map((r) => r.name ?? "Rider"),
+    })),
+  });
 
   return (
     <main className="min-h-dvh bg-paper text-ink">
@@ -173,6 +192,10 @@ export default async function RideDetailPage({ params }: { params: Params }) {
             )}
           </div>
         )}
+
+        <div className="mt-4">
+          <CopyRideButton text={shareText} />
+        </div>
 
         {ride.startPointLat && ride.startPointLng && (
           <div className="mt-6">
