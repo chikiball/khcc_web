@@ -39,10 +39,10 @@ export default async function LandingPage() {
           <Image
             src="/icon-512.png"
             alt="Burkam"
-            width={120}
-            height={120}
+            width={240}
+            height={240}
             priority
-            className="mx-auto block h-28 w-28 sm:h-32 sm:w-32 object-contain"
+            className="mx-auto block h-56 w-56 sm:h-64 sm:w-64 object-contain"
           />
           <h1 className="mt-6 font-display text-5xl sm:text-6xl font-bold tracking-tight text-ink leading-[0.95]">
             Bubur

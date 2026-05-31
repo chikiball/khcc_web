@@ -28,6 +28,9 @@ services:
       args:
         AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID}
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://burkam.nandharu.uk}
+        # Mapbox token must be a build arg too — Next.js bakes
+        # NEXT_PUBLIC_* into the client JS at build time.
+        NEXT_PUBLIC_MAPBOX_TOKEN: ${NEXT_PUBLIC_MAPBOX_TOKEN}
         # Server-action encryption key MUST be set at build time — Next.js
         # encrypts action IDs into the JS bundle when building. If absent
         # here, every build generates a fresh key and existing browser tabs
@@ -68,6 +71,7 @@ services:
       # Public (server-side reads only — Next.js bakes NEXT_PUBLIC_* into the
       # client bundle at build time via build args above)
       - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-https://burkam.nandharu.uk}
+      - NEXT_PUBLIC_MAPBOX_TOKEN=${NEXT_PUBLIC_MAPBOX_TOKEN}
       # Cron secret — protects the ride-materialisation endpoint
       - CRON_SECRET=${CRON_SECRET}
     depends_on:

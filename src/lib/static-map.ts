@@ -3,15 +3,17 @@ import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 
 /**
- * Generate a static preview image of a GPX route: stitch OpenStreetMap
- * tiles for the route's bounding box and draw the polyline over them as
- * an SVG overlay. Saved as a JPEG under /uploads/routes/<id>-preview.jpg
- * and shown as the banner image on each ride card in the rides list.
+ * Generate a static preview image of a GPX route: stitch map tiles for the
+ * route's bounding box and draw the polyline over them as an SVG overlay.
+ * Saved as a JPEG under /uploads/routes/<id>-preview.jpg and shown as the
+ * banner image on each ride card in the rides list.
  *
  * Called once per GPX upload — the resulting image is cached on disk
- * indefinitely and never re-fetched until the next upload. This keeps
- * us well within the OSM tile-usage policy: a few requests per upload
- * with an identifying User-Agent.
+ * indefinitely and never re-fetched until the next upload.
+ *
+ * Tile source is Mapbox raster (matches the live MapPicker). Falls back to
+ * OpenStreetMap if NEXT_PUBLIC_MAPBOX_TOKEN is unset, so the dev experience
+ * works without a token.
  *
  * Slippy-map math reference:
  *   https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames
@@ -19,8 +21,15 @@ import path from "node:path";
 
 const TILE_SIZE = 256;
 const USER_AGENT = "Burkam-Web/0.1 (https://burkam.nandharu.uk)";
+
+// Server-side reads of NEXT_PUBLIC_* are fine — Next.js inlines these at
+// build time but they remain readable in node at runtime too.
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
+const MAPBOX_STYLE = "mapbox/streets-v12";
 const TILE_URL = (z: number, x: number, y: number) =>
-  `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+  MAPBOX_TOKEN
+    ? `https://api.mapbox.com/styles/v1/${MAPBOX_STYLE}/tiles/256/${z}/${x}/${y}?access_token=${MAPBOX_TOKEN}`
+    : `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
 
 const IMG_W = 600;
 const IMG_H = 300;
