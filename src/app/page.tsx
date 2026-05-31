@@ -3,7 +3,7 @@ import Image from "next/image";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth-helpers";
 import { db, schema } from "@/db";
-import { desc, inArray } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -14,28 +14,36 @@ export default async function LandingPage() {
     redirect(user.status === "approved" ? "/rides" : "/pending");
   }
 
-  // Fetch admin-editable content blocks + gallery photos in parallel.
+  // Fetch admin-editable About block + gallery photos in parallel.
+  // NOTE: the "achievements" / trophy-case block is intentionally hidden for
+  // now — to revive it, switch this back to inArray(..., ["about", "achievements"])
+  // and uncomment the matching JSX below.
   const [blocks, photos] = await Promise.all([
     db
       .select()
       .from(schema.contentBlocks)
-      .where(inArray(schema.contentBlocks.key, ["about", "achievements"])),
+      .where(eq(schema.contentBlocks.key, "about")),
     db
       .select()
       .from(schema.galleryPhotos)
       .orderBy(desc(schema.galleryPhotos.createdAt)),
   ]);
   const about = blocks.find((b) => b.key === "about");
-  const achievements = blocks.find((b) => b.key === "achievements");
+  // const achievements = blocks.find((b) => b.key === "achievements");
 
   return (
     <main className="min-h-dvh bg-paper text-ink">
       <section className="relative overflow-hidden">
         <div className="brush-divider absolute inset-0 opacity-60" aria-hidden="true" />
         <div className="relative max-w-2xl mx-auto px-6 pt-20 pb-16 text-center">
-          <span className="inline-block hex-clip bg-coral-400 text-cream-50 px-6 py-2 text-xs font-bold tracking-widest">
-            BURKAM
-          </span>
+          <Image
+            src="/icon-512.png"
+            alt="Burkam"
+            width={120}
+            height={120}
+            priority
+            className="mx-auto block h-28 w-28 sm:h-32 sm:w-32 object-contain"
+          />
           <h1 className="mt-6 font-display text-5xl sm:text-6xl font-bold tracking-tight text-ink leading-[0.95]">
             Bubur
             <br />
@@ -58,12 +66,14 @@ export default async function LandingPage() {
             >
               {about?.title ?? "What is Burkam?"}
             </Link>
+            {/* Trophy case button — hidden for now. Restore when ready.
             <Link
               href="#achievements"
               className="inline-flex items-center justify-center rounded-2xl bg-transparent ring-1 ring-maroon-300 text-ink px-6 py-3 font-semibold hover:bg-cream-100"
             >
               {achievements?.title ?? "Achievements"}
             </Link>
+            */}
           </div>
         </div>
       </section>
@@ -90,7 +100,9 @@ export default async function LandingPage() {
       </section>
 
       {about && <ContentSection id="about" block={about} />}
+      {/* Trophy case section — hidden for now. Restore when ready.
       {achievements && <ContentSection id="achievements" block={achievements} />}
+      */}
 
       <footer className="border-t border-maroon-200/40 py-8 text-center text-xs text-ink-soft/70">
         Burkam · Bubur Kampung Cycling

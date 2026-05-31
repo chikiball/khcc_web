@@ -1,10 +1,16 @@
 import { db, schema } from "@/db";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { asc } from "drizzle-orm";
+import { asc, notInArray } from "drizzle-orm";
 import { updateContentBlock } from "./actions";
 
 export const metadata = { title: "Content" };
 export const dynamic = "force-dynamic";
+
+// Block keys that are intentionally hidden from the admin content editor.
+// "achievements" / trophy case is parked until we want to revive it — drop
+// the entry from this list to bring it back, and uncomment the matching
+// JSX in src/app/page.tsx.
+const HIDDEN_BLOCK_KEYS = ["achievements"];
 
 type SearchParams = Promise<{ saved?: string }>;
 
@@ -19,6 +25,7 @@ export default async function AdminContentPage({
   const blocks = await db
     .select()
     .from(schema.contentBlocks)
+    .where(notInArray(schema.contentBlocks.key, HIDDEN_BLOCK_KEYS))
     .orderBy(asc(schema.contentBlocks.key));
 
   return (
