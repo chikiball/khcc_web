@@ -24,7 +24,17 @@ const USER_AGENT = "Burkam-Web/0.1 (https://burkam.nandharu.uk)";
 
 // Server-side reads of NEXT_PUBLIC_* are fine — Next.js inlines these at
 // build time but they remain readable in node at runtime too.
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
+//
+// Two-token pattern: prefer MAPBOX_SERVER_TOKEN (server-only, no URL
+// restriction so server-side fetches without a Referer header succeed).
+// Fall back to NEXT_PUBLIC_MAPBOX_TOKEN so single-token dev still works,
+// then OSM as last resort. Mapbox refuses URL-restricted tokens for
+// fetches without a matching Referer, which any server-side fetch is —
+// keep the *public* token URL-restricted and use the *server* one here.
+const MAPBOX_TOKEN =
+  process.env.MAPBOX_SERVER_TOKEN ??
+  process.env.NEXT_PUBLIC_MAPBOX_TOKEN ??
+  "";
 const MAPBOX_STYLE = "mapbox/streets-v12";
 const TILE_URL = (z: number, x: number, y: number) =>
   MAPBOX_TOKEN
@@ -72,7 +82,10 @@ async function fetchTile(z: number, x: number, y: number): Promise<Buffer> {
       headers: { "User-Agent": USER_AGENT },
       signal: ctrl.signal,
     });
-    if (!res.ok) throw new Error(`OSM tile ${z}/${x}/${y} → ${res.status}`);
+    if (!res.ok) {
+      const provider = MAPBOX_TOKEN ? "Mapbox" : "OSM";
+      throw new Error(`${provider} tile ${z}/${x}/${y} → ${res.status}`);
+    }
     return Buffer.from(await res.arrayBuffer());
   } finally {
     clearTimeout(t);

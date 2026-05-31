@@ -146,9 +146,13 @@ Static map previews: generated server-side on GPX upload by `src/lib/static-map.
 - **Admin ride form**: tap to drop a pin, fills lat/lng inputs. `src/components/location-fields.tsx` wraps it with the text inputs.
 - **Ride detail**: read-only map with a dark-blue polyline overlay when a GPX exists (`src/components/ride-detail-map.tsx`).
 
-Tile source is **Mapbox raster** (`mapbox/streets-v12` style, swap to `outdoors-v12` or `satellite-streets-v12` in `MAPBOX_STYLE` if you want a different look). The token comes from `NEXT_PUBLIC_MAPBOX_TOKEN` — set it in `.env` and pass it as a build arg in `docker-compose.yml` (Next.js inlines `NEXT_PUBLIC_*` into the client bundle at build time, so a runtime-only env won't reach the browser). When the token is empty, both `MapPicker` and `static-map.ts` fall back to public OSM tiles, and the picker shows a small "token not set" notice.
+Tile source is **Mapbox raster** (`mapbox/streets-v12` style, swap to `outdoors-v12` or `satellite-streets-v12` in `MAPBOX_STYLE` if you want a different look).
 
-Restrict the Mapbox token to `https://burkam.nandharu.uk/*` in the Mapbox dashboard since it ships in client JS.
+**Two-token pattern:**
+- `NEXT_PUBLIC_MAPBOX_TOKEN` — embedded in the client JS bundle (build arg). URL-restrict it to `https://burkam.nandharu.uk/*` in the Mapbox dashboard since it ships in plaintext.
+- `MAPBOX_SERVER_TOKEN` — used only by `src/lib/static-map.ts` for the server-side route-preview JPEG generation. Must have **no URL restriction**, because server-side fetches send no `Referer` header → URL-restricted tokens 403. Runtime env only, never reaches the client.
+
+When both tokens are empty, both `MapPicker` and `static-map.ts` fall back to public OSM tiles, and the picker shows a small "token not set" notice. (Note: OSM has been blocking server-side tile fetches with 403 — server preview generation only works reliably with a Mapbox token.)
 
 Mapbox+OSM attribution must remain visible (Mapbox ToS + OSM policy). Polyline color is `#1e40af` (dark blue).
 
