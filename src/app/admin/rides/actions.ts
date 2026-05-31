@@ -12,6 +12,19 @@ import { asc, eq, inArray } from "drizzle-orm";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+/**
+ * Marker class for validation errors that should be surfaced inline on the
+ * form rather than as a generic 500 page. The caller catches FormError and
+ * redirects back to the source page with `?error=<message>`. Anything else
+ * propagates as a real server error.
+ */
+class FormError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FormError";
+  }
+}
+
 type RideInput = {
   title: string;
   starts_at: string;
@@ -43,9 +56,9 @@ function parseRideInput(formData: FormData): RideInput {
   const title = get("title");
   const starts_at = get("starts_at");
   const start_point_name = get("start_point_name");
-  if (!title) throw new Error("Title is required.");
-  if (!starts_at) throw new Error("Date and time is required.");
-  if (!start_point_name) throw new Error("Start point is required.");
+  if (!title) throw new FormError("Title is required.");
+  if (!starts_at) throw new FormError("Date and time is required.");
+  if (!start_point_name) throw new FormError("Start point is required.");
   return {
     title, starts_at, start_point_name,
     start_point_lat: get("start_point_lat") || undefined,
@@ -61,14 +74,15 @@ function parsePaceGroups(formData: FormData): PaceGroupInput[] {
   const raw = String(formData.get("pace_groups") ?? "[]");
   try {
     const arr = JSON.parse(raw) as PaceGroupInput[];
-    if (!arr.length) throw new Error("At least one pace group is required.");
+    if (!arr.length) throw new FormError("At least one pace group is required.");
     for (const pg of arr) {
-      if (!pg.pace_code) throw new Error("Every pace group needs a pace code.");
+      if (!pg.pace_code) throw new FormError("Every pace group needs a pace code.");
     }
     return arr;
   } catch (e) {
-    if (e instanceof Error) throw e;
-    throw new Error("Invalid pace groups data.");
+    if (e instanceof FormError) throw e;
+    if (e instanceof Error) throw new FormError(e.message);
+    throw new FormError("Invalid pace groups data.");
   }
 }
 
@@ -92,10 +106,16 @@ async function maybeMergeGpx(
 ): Promise<{ file: File; text: string } | null> {
   const file = formData.get("gpx");
   if (!(file instanceof File) || file.size === 0) return null;
-  if (!file.name.toLowerCase().endsWith(".gpx")) throw new Error("Route file must end in .gpx.");
-  if (file.size > 5 * 1024 * 1024) throw new Error("GPX file is too big (5 MB max).");
+  if (!file.name.toLowerCase().endsWith(".gpx")) throw new FormError("Route file must end in .gpx.");
+  if (file.size > 5 * 1024 * 1024) throw new FormError("GPX file is too big (5 MB max).");
   const text = await file.text();
-  const parsed = parseGpx(text);
+  let parsed;
+  try {
+    parsed = parseGpx(text);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Could not parse GPX file.";
+    throw new FormError(msg);
+  }
   input.distance_km = String(parsed.distanceKm);
   input.elevation_m = String(parsed.elevationM);
   return { file, text };
@@ -157,9 +177,20 @@ async function syncPaceGroups(
 
 export async function createRide(formData: FormData) {
   await requireRideManager();
-  const input = parseRideInput(formData);
-  const paceGroups = parsePaceGroups(formData);
-  const gpx = await maybeMergeGpx(formData, input);
+
+  let input: RideInput;
+  let paceGroups: PaceGroupInput[];
+  let gpx: { file: File; text: string } | null;
+  try {
+    input = parseRideInput(formData);
+    paceGroups = parsePaceGroups(formData);
+    gpx = await maybeMergeGpx(formData, input);
+  } catch (err) {
+    if (err instanceof FormError) {
+      redirect(`/admin/rides/new?error=${encodeURIComponent(err.message)}`);
+    }
+    throw err;
+  }
 
   // Check if this is a recurring ride
   const recurrence = (String(formData.get("recurrence") ?? "")).trim();
@@ -224,9 +255,20 @@ export async function createRide(formData: FormData) {
 
 export async function updateRide(rideId: string, formData: FormData) {
   const manager = await requireRideManager();
-  const input = parseRideInput(formData);
-  const paceGroups = parsePaceGroups(formData);
-  const gpx = await maybeMergeGpx(formData, input);
+
+  let input: RideInput;
+  let paceGroups: PaceGroupInput[];
+  let gpx: { file: File; text: string } | null;
+  try {
+    input = parseRideInput(formData);
+    paceGroups = parsePaceGroups(formData);
+    gpx = await maybeMergeGpx(formData, input);
+  } catch (err) {
+    if (err instanceof FormError) {
+      redirect(`/admin/rides/${rideId}/edit?error=${encodeURIComponent(err.message)}`);
+    }
+    throw err;
+  }
 
   await db
     .update(schema.rides)

@@ -7,6 +7,8 @@ import { requireRideManager } from "@/lib/auth-helpers";
 
 export const metadata = { title: "New ride" };
 
+type SearchParams = Promise<{ error?: string }>;
+
 async function getLeaders(): Promise<LeaderOption[]> {
   return db.select({ id: schema.users.id, name: schema.users.name })
     .from(schema.users)
@@ -17,8 +19,13 @@ async function getRideTypes(): Promise<RideTypeOption[]> {
   return db.select().from(schema.rideTypes).orderBy(asc(schema.rideTypes.position));
 }
 
-export default async function NewRidePage() {
+export default async function NewRidePage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const manager = await requireRideManager();
+  const { error } = await searchParams;
 
   const [[managerProfile], leaders, rideTypes] = await Promise.all([
     db.select({ paceGroup: schema.users.paceGroup })
@@ -37,6 +44,11 @@ export default async function NewRidePage() {
     <main className="px-5 py-8 max-w-2xl mx-auto">
       <h1 className="font-display text-3xl font-bold">New ride</h1>
       <p className="text-sm text-ink-soft mt-1">Set the basics, hit save.</p>
+      {error && (
+        <div className="mt-4 rounded-2xl bg-flash-500/10 ring-1 ring-flash-500/40 px-4 py-3 text-sm text-flash-600">
+          ⚠ {error}
+        </div>
+      )}
       <RideForm
         action={createRide}
         defaultPaceGroups={defaultPaceGroups}

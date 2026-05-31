@@ -11,14 +11,22 @@ import { PaceCancelButtons } from "@/components/pace-cancel-buttons";
 export const metadata = { title: "Edit ride" };
 
 type Params = Promise<{ id: string }>;
+type SearchParams = Promise<{ error?: string }>;
 
 function toLocalDateTimeInput(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export default async function EditRidePage({ params }: { params: Params }) {
+export default async function EditRidePage({
+  params,
+  searchParams,
+}: {
+  params: Params;
+  searchParams: SearchParams;
+}) {
   const { id } = await params;
+  const { error } = await searchParams;
 
   const [ride, seriesResult] = await Promise.all([
     db.select().from(schema.rides).where(eq(schema.rides.id, id)).limit(1).then((r) => r[0]),
@@ -65,6 +73,12 @@ export default async function EditRidePage({ params }: { params: Params }) {
         <div className="mt-4 rounded-2xl bg-maroon-100 ring-1 ring-maroon-200 px-4 py-3 text-sm">
           <p className="font-semibold text-maroon-800">Reason</p>
           <p className="text-ink mt-0.5">{ride.cancelledReason}</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="mt-4 rounded-2xl bg-flash-500/10 ring-1 ring-flash-500/40 px-4 py-3 text-sm text-flash-600">
+          ⚠ {error}
         </div>
       )}
 
