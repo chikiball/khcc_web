@@ -10,7 +10,11 @@
 
 type GpxPoint = { lat: number; lng: number; ele?: number };
 
-const TRKPT_RE = /<trkpt[^>]*\blat="([^"]+)"[^>]*\blon="([^"]+)"[^>]*>([\s\S]*?)<\/trkpt>/g;
+// Matches both self-closing (<trkpt ... />) and paired (<trkpt ...>...</trkpt>)
+// forms. Self-closing trkpts are produced by route planners that omit
+// elevation/time data — Strava "Route GPX" with no elevation profile, e.g.
+const TRKPT_RE =
+  /<trkpt[^>]*\blat="([^"]+)"[^>]*\blon="([^"]+)"[^>]*(?:\/>|>([\s\S]*?)<\/trkpt>)/g;
 const ELE_RE = /<ele>([^<]+)<\/ele>/;
 
 const ELE_NOISE_THRESHOLD_M = 0.5; // ignore sub-half-metre deltas as GPS noise
@@ -29,7 +33,7 @@ export function parseGpx(xml: string): ParsedGpx {
     const lat = Number(match[1]);
     const lng = Number(match[2]);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-    const inner = match[3];
+    const inner = match[3] ?? "";
     const eleMatch = ELE_RE.exec(inner);
     const eleNum = eleMatch ? Number(eleMatch[1]) : NaN;
     points.push({ lat, lng, ele: Number.isFinite(eleNum) ? eleNum : undefined });
