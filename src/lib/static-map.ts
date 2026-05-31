@@ -44,7 +44,7 @@ const TILE_URL = (z: number, x: number, y: number) =>
 const IMG_W = 600;
 const IMG_H = 300;
 const PADDING_PX = 30;
-const ROUTE_COLOR = "#1e40af"; // matches the live map's polyline
+const ROUTE_COLOR = "#FC5201"; // matches the live map's polyline
 const ROUTE_WIDTH = 4;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 17;

@@ -154,7 +154,7 @@ Tile source is **Mapbox raster** (`mapbox/streets-v12` style, swap to `outdoors-
 
 When both tokens are empty, both `MapPicker` and `static-map.ts` fall back to public OSM tiles, and the picker shows a small "token not set" notice. (Note: OSM has been blocking server-side tile fetches with 403 — server preview generation only works reliably with a Mapbox token.)
 
-Mapbox+OSM attribution must remain visible (Mapbox ToS + OSM policy). Polyline color is `#1e40af` (dark blue).
+Mapbox+OSM attribution must remain visible (Mapbox ToS + OSM policy). Polyline color is `#FC5201` (orange).
 
 ## GPX upload
 

@@ -114,7 +114,7 @@ export function MapPicker({
         {hasRoute && (
           <Polyline
             positions={routeCoords}
-            pathOptions={{ color: "#1e40af", weight: 4, opacity: 0.85 }}
+            pathOptions={{ color: "#FC5201", weight: 4, opacity: 0.85 }}
           />
         )}
         {hasPin && <Marker position={[lat, lng]} icon={PIN} />}
