@@ -87,7 +87,7 @@ export default async function RidesPage() {
   return (
     <main className="min-h-dvh bg-paper text-ink">
       <header className="px-5 pt-6 pb-4 flex items-center justify-between">
-        <Link href="/rides" className="font-display text-2xl font-bold tracking-tight">KHCC</Link>
+        <Link href="/rides" className="font-display text-2xl font-bold tracking-tight">Burkam</Link>
         <div className="flex items-center gap-4">
           {canManageRides(user.role) && (
             <Link href="/admin/rides" className="text-sm font-medium text-coral-700 hover:text-coral-800 underline-offset-4 hover:underline">

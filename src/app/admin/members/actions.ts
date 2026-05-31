@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 
 const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://khcc.nandharu.uk";
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://burkam.nandharu.uk";
 
 export async function approveUser(userId: string) {
   const admin = await requireAdmin();
@@ -27,13 +27,13 @@ export async function approveUser(userId: string) {
   if (target?.email) {
     sendEmail({
       to: target.email,
-      subject: "You're in — KHCC",
+      subject: "You're in — Burkam",
       html: emailTemplate({
-        title: "Welcome to KHCC",
+        title: "Welcome to Burkam",
         body: `<p>Hi ${target.name?.split(" ")[0] ?? "rider"},</p>
-               <p>Your KHCC application is approved. Sign in at <a href="${SITE_URL}">${SITE_URL}</a> to RSVP to rides.</p>
-               <p>See you on the road. Chop chop.</p>`,
-        ctaText: "Open KHCC",
+               <p>Your Burkam application is approved. Sign in at <a href="${SITE_URL}">${SITE_URL}</a> to RSVP to rides.</p>
+               <p>See you at East Coast. Pedal, bubur, repeat.</p>`,
+        ctaText: "Open Burkam",
         ctaUrl: SITE_URL,
       }),
     }).catch((err) => console.error("[approve email]", err.message));
@@ -73,12 +73,12 @@ export async function rejectUser(userId: string, formData: FormData) {
     .returning({ email: schema.users.email, name: schema.users.name });
 
   if (target?.email) {
-    const subject = wasApproved ? "Your KHCC access" : "About your KHCC application";
+    const subject = wasApproved ? "Your Burkam access" : "About your Burkam application";
     const headline = wasApproved
-      ? "Your KHCC access has been removed"
-      : "About your KHCC application";
+      ? "Your Burkam access has been removed"
+      : "About your Burkam application";
     const lead = wasApproved
-      ? "Your KHCC access has been removed by an admin."
+      ? "Your Burkam access has been removed by an admin."
       : "Thanks for your interest. We weren&rsquo;t able to approve your application at this time.";
 
     sendEmail({
@@ -90,7 +90,7 @@ export async function rejectUser(userId: string, formData: FormData) {
                <p>${lead}</p>
                <p><strong>Reason:</strong><br>${reason.replace(/\n/g, "<br>")}</p>
                <p>If you think this was a mistake, sign in again at <a href="${SITE_URL}">${SITE_URL}</a> and an admin will take another look.</p>`,
-        ctaText: "Open KHCC",
+        ctaText: "Open Burkam",
         ctaUrl: SITE_URL,
       }),
     }).catch((err) => console.error("[reject email]", err.message));

@@ -34,16 +34,16 @@ export default async function LandingPage() {
         <div className="brush-divider absolute inset-0 opacity-60" aria-hidden="true" />
         <div className="relative max-w-2xl mx-auto px-6 pt-20 pb-16 text-center">
           <span className="inline-block hex-clip bg-coral-400 text-cream-50 px-6 py-2 text-xs font-bold tracking-widest">
-            KHCC
+            BURKAM
           </span>
           <h1 className="mt-6 font-display text-5xl sm:text-6xl font-bold tracking-tight text-ink leading-[0.95]">
-            Knock House
+            Bubur
             <br />
-            <span className="text-brand-strong">Chop Chop.</span>
+            <span className="text-brand-strong">Kampung.</span>
           </h1>
           <p className="mt-6 text-lg text-ink-soft max-w-md mx-auto">
-            Fast-pace road cycling. Show up, ride hard, coffee, go home. No
-            three-paragraph WhatsApp messages.
+            Chill rides along East Coast & Changi. Pedal, bubur, repeat.
+            Weekends and the occasional sunrise weekday.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
             <Link
@@ -56,7 +56,7 @@ export default async function LandingPage() {
               href="#about"
               className="inline-flex items-center justify-center rounded-2xl bg-transparent ring-1 ring-maroon-300 text-ink px-6 py-3 font-semibold hover:bg-cream-100"
             >
-              {about?.title ?? "What is KHCC?"}
+              {about?.title ?? "What is Burkam?"}
             </Link>
             <Link
               href="#achievements"
@@ -93,7 +93,7 @@ export default async function LandingPage() {
       {achievements && <ContentSection id="achievements" block={achievements} />}
 
       <footer className="border-t border-maroon-200/40 py-8 text-center text-xs text-ink-soft/70">
-        Knock House Chop Chop · Cycling Club
+        Burkam · Bubur Kampung Cycling
       </footer>
     </main>
   );

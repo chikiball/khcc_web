@@ -21,7 +21,7 @@ export async function uploadGalleryPhoto(formData: FormData) {
   // as the on-disk filename. Any sharp/IO failure rolls back via try/catch.
   const [row] = await db
     .insert(schema.galleryPhotos)
-    .values({ imageUrl: "", alt: alt || "KHCC photo", uploadedBy: admin.id })
+    .values({ imageUrl: "", alt: alt || "Burkam photo", uploadedBy: admin.id })
     .returning({ id: schema.galleryPhotos.id });
 
   try {
@@ -43,7 +43,7 @@ export async function uploadGalleryPhoto(formData: FormData) {
 
 export async function updateGalleryAlt(photoId: string, formData: FormData) {
   await requireAdmin();
-  const alt = String(formData.get("alt") ?? "").trim() || "KHCC photo";
+  const alt = String(formData.get("alt") ?? "").trim() || "Burkam photo";
 
   await db
     .update(schema.galleryPhotos)

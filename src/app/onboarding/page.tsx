@@ -36,13 +36,13 @@ export default async function OnboardingPage() {
     <main className="min-h-dvh bg-paper text-ink">
       <div className="max-w-md mx-auto px-6 py-12">
         <span className="inline-block hex-clip bg-coral-400 text-cream-50 px-5 py-1.5 text-[10px] font-bold tracking-widest">
-          KHCC
+          BURKAM
         </span>
         <h1 className="mt-6 font-display text-3xl font-bold leading-tight">
           One quick form, then we ride.
         </h1>
         <p className="mt-2 text-sm text-ink-soft">
-          Chop chop — should take 60 seconds.
+          Should take 60 seconds.
         </p>
 
         <form action={completeOnboarding} className="mt-8 space-y-5">
@@ -100,7 +100,7 @@ export default async function OnboardingPage() {
             label="Strava handle"
             name="strava_handle"
             defaultValue={profile?.stravaHandle ?? ""}
-            placeholder="@khcc.rider — optional"
+            placeholder="@burkam.rider — optional"
           />
 
           <div className="pt-3">

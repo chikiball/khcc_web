@@ -4,7 +4,7 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
-echo "=== KHCC Web Deploy ==="
+echo "=== Burkam Web Deploy ==="
 
 if [ ! -f .env ]; then
   echo "ERROR: .env not found in $REPO_DIR"
@@ -26,7 +26,7 @@ docker compose up -d db
 
 echo "--- waiting for db healthcheck ---"
 for i in $(seq 1 20); do
-  status="$(docker inspect --format='{{.State.Health.Status}}' khcc-db 2>/dev/null || echo 'unknown')"
+  status="$(docker inspect --format='{{.State.Health.Status}}' burkam-db 2>/dev/null || echo 'unknown')"
   if [ "$status" = "healthy" ]; then
     echo "--- db healthy ---"
     break
@@ -38,34 +38,34 @@ done
 echo "--- syncing db role password with .env ---"
 # postgres only honours POSTGRES_PASSWORD on FIRST volume init. Without this
 # step, any later change to POSTGRES_PASSWORD in .env would leave the stored
-# role password stale and silently break khcc-web auth. Idempotent — runs
+# role password stale and silently break burkam-web auth. Idempotent — runs
 # every deploy. Uses psql's :'var' interpolation so the password is properly
 # escaped even if it contains quotes or backslashes.
 PW=$(grep '^POSTGRES_PASSWORD=' .env | cut -d= -f2-)
 DB_USER=$(grep '^POSTGRES_USER=' .env | cut -d= -f2-)
 DB_NAME=$(grep '^POSTGRES_DB=' .env | cut -d= -f2-)
-DB_USER=${DB_USER:-khcc}
-DB_NAME=${DB_NAME:-khcc}
+DB_USER=${DB_USER:-burkam}
+DB_NAME=${DB_NAME:-burkam}
 
 if [ -z "$PW" ]; then
   echo "ERROR: POSTGRES_PASSWORD is empty in .env — aborting deploy"
   exit 1
 fi
 
-docker exec -i khcc-db psql -U "$DB_USER" -d "$DB_NAME" -v ROLEPASS="$PW" >/dev/null <<SQL
+docker exec -i burkam-db psql -U "$DB_USER" -d "$DB_NAME" -v ROLEPASS="$PW" >/dev/null <<SQL
 ALTER USER "$DB_USER" WITH PASSWORD :'ROLEPASS';
 SQL
 echo "--- role password in sync ---"
 
 echo "--- docker build ---"
-docker compose build khcc-web
+docker compose build burkam-web
 
-echo "--- docker up khcc-web (entrypoint runs migrations before Next.js boots) ---"
-docker compose up -d khcc-web
+echo "--- docker up burkam-web (entrypoint runs migrations before Next.js boots) ---"
+docker compose up -d burkam-web
 
 echo "--- waiting for web healthcheck ---"
 for i in $(seq 1 20); do
-  status="$(docker inspect --format='{{.State.Health.Status}}' khcc-web 2>/dev/null || echo 'unknown')"
+  status="$(docker inspect --format='{{.State.Health.Status}}' burkam-web 2>/dev/null || echo 'unknown')"
   if [ "$status" = "healthy" ]; then
     echo "--- healthy ---"
     break
@@ -76,4 +76,4 @@ done
 
 docker compose ps
 echo "=== Deploy complete ==="
-echo "Reload nginx if you changed nginx/khcc.conf:  sudo nginx -s reload"
+echo "Reload nginx if you changed nginx/burkam.conf:  sudo nginx -s reload"

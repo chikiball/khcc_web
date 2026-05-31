@@ -4,7 +4,7 @@
  * have a preview.
  *
  * Run via:
- *   docker exec khcc-web node node_modules/tsx/dist/cli.mjs scripts/backfill-route-previews.ts
+ *   docker exec burkam-web node node_modules/tsx/dist/cli.mjs scripts/backfill-route-previews.ts
  */
 
 import { readdir, readFile, stat } from "node:fs/promises";

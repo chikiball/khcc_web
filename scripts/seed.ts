@@ -3,7 +3,8 @@
  *
  *   DATABASE_URL=postgres://... npx tsx scripts/seed.ts
  *
- * Idempotent: skips if rides already exist.
+ * Idempotent: skips if rides already exist. Requires that ride_types is
+ * already populated (run scripts/seed-types.ts first if you used db:push).
  */
 
 import { db, schema } from "../src/db";
@@ -27,49 +28,61 @@ async function main() {
     return d;
   };
 
-  // Insert ride shells (no pace_group, leader_id or cap on rides any more)
-  const inserted = await db.insert(schema.rides).values([
-    {
-      title: "Saturday Bunch — East Coast",
-      startsAt: inDays(2, 5),
-      startPointName: "Marina Barrage",
-      distanceKm: "65",
-      elevationM: 180,
-      routeUrl: "https://www.strava.com/routes/example",
-      description: "Steady B-pace loop. Coffee at the usual spot after.",
-    },
-    {
-      title: "Hambalang Hill Repeats",
-      startsAt: inDays(5, 6),
-      startPointName: "Sentul Circuit",
-      distanceKm: "80",
-      elevationM: 1200,
-      routeUrl: "https://www.strava.com/routes/example",
-      description: "4× hill repeats. Bring the climbing legs.",
-    },
-    {
-      title: "Sunday Easy Roll",
-      startsAt: inDays(6, 6),
-      startPointName: "Knock House",
-      distanceKm: "40",
-      elevationM: 90,
-      description: "No-drop. New riders welcome.",
-    },
-  ]).returning({ id: schema.rides.id, title: schema.rides.title });
+  // East Coast Park - Marina Barrage area (typical Burkam start)
+  const ECP_LAT = "1.3010";
+  const ECP_LNG = "103.8730";
+  // Changi Village turnaround (bubur kampung stop)
+  const CHANGI_LAT = "1.3893";
+  const CHANGI_LNG = "103.9851";
 
-  // Add pace groups for each ride
+  const inserted = await db
+    .insert(schema.rides)
+    .values([
+      {
+        title: "Saturday Bubur Run",
+        startsAt: inDays(2, 6),
+        startPointName: "East Coast Park (Marina Barrage)",
+        startPointLat: ECP_LAT,
+        startPointLng: ECP_LNG,
+        distanceKm: "55",
+        elevationM: 60,
+        description:
+          "ECP to Changi Village and back. No-drop, breakfast stop for bubur kampung at Changi Village hawker.",
+      },
+      {
+        title: "Wednesday Wake-up",
+        startsAt: inDays(5, 6),
+        startPointName: "East Coast Park (Marina Barrage)",
+        startPointLat: ECP_LAT,
+        startPointLng: ECP_LNG,
+        distanceKm: "30",
+        elevationM: 30,
+        description: "Short weekday spin. Be done by 8 and head to work.",
+      },
+      {
+        title: "Sunday Mixed Pace",
+        startsAt: inDays(6, 6),
+        startPointName: "Changi Village",
+        startPointLat: CHANGI_LAT,
+        startPointLng: CHANGI_LNG,
+        distanceKm: "65",
+        elevationM: 80,
+        description: "Two groups: chill out front, pacy chasing. Same start, same finish.",
+      },
+    ])
+    .returning({ id: schema.rides.id, title: schema.rides.title });
+
   await db.insert(schema.ridePaceGroups).values([
-    // Saturday Bunch: A + B + C
-    { rideId: inserted[0].id, paceCode: "A", notes: "Fast loop, extra hill detour.", position: 0 },
-    { rideId: inserted[0].id, paceCode: "B", position: 1 },
-    { rideId: inserted[0].id, paceCode: "C", notes: "No-drop, turn back at 30km.", position: 2 },
-    // Hambalang: A only
-    { rideId: inserted[1].id, paceCode: "A", position: 0 },
-    // Sunday roll: C only
-    { rideId: inserted[2].id, paceCode: "C", position: 0 },
+    // Saturday: single chill
+    { rideId: inserted[0].id, paceCode: "chill", position: 0 },
+    // Wednesday: single chill
+    { rideId: inserted[1].id, paceCode: "chill", position: 0 },
+    // Sunday: chill + pacy
+    { rideId: inserted[2].id, paceCode: "chill", position: 0 },
+    { rideId: inserted[2].id, paceCode: "pacy", position: 1 },
   ]);
 
-  console.log("✓ seeded 3 rides with pace groups");
+  console.log("✓ seeded 3 rides (2 single-pace, 1 multi-pace)");
   process.exit(0);
 }
 

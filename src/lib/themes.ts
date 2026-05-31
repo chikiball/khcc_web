@@ -5,11 +5,14 @@
  * Tailwind's --color-* design tokens via CSS variable overrides in
  * globals.css.
  *
+ * Default ("tropical") lives in the @theme block in globals.css; the
+ * three keys below have explicit `[data-theme="<key>"]` overrides.
+ *
  * To add a theme: append an entry below AND a corresponding
  * `[data-theme="<key>"] { ... }` block in src/app/globals.css.
  */
 
-export type ThemeKey = "coral" | "bright" | "sky" | "mono";
+export type ThemeKey = "tropical" | "sunrise" | "lagoon" | "mono";
 
 export type ThemeOption = {
   key: ThemeKey;
@@ -21,22 +24,22 @@ export type ThemeOption = {
 
 export const THEMES: ThemeOption[] = [
   {
-    key: "coral",
-    label: "Coral",
-    description: "Pink + maroon + cream. The original KHCC kit.",
-    swatches: ["#ec6e8a", "#5b1f2a", "#ff5b3f", "#f4ece0", "#fdfaf5"],
+    key: "tropical",
+    label: "Tropical",
+    description: "Sky blue + white + pale green. East Coast at sunrise.",
+    swatches: ["#0ea5e9", "#1e293b", "#fb923c", "#ecfdf3", "#ffffff"],
   },
   {
-    key: "bright",
-    label: "Bright",
-    description: "Magenta + teal + amber — the \"we went bright\" rainbow-swirl jersey.",
-    swatches: ["#ec4899", "#115e59", "#f59e0b", "#fef3c7", "#fffbeb"],
+    key: "sunrise",
+    label: "Sunrise",
+    description: "Warm orange + sand + cream. ECP first light.",
+    swatches: ["#f97316", "#292524", "#ec4899", "#fdf3d8", "#fffdf7"],
   },
   {
-    key: "sky",
-    label: "Sky",
-    description: "Sky blue + navy + coral accent — the blue training kit.",
-    swatches: ["#0ea5e9", "#1e3a8a", "#ff5b3f", "#dbeafe", "#f0f9ff"],
+    key: "lagoon",
+    label: "Lagoon",
+    description: "Teal + ocean blue + seafoam. Singapore Strait water.",
+    swatches: ["#14b8a6", "#0c4a6e", "#f43f5e", "#d1fae5", "#f7fefb"],
   },
   {
     key: "mono",
@@ -46,7 +49,7 @@ export const THEMES: ThemeOption[] = [
   },
 ];
 
-export const DEFAULT_THEME: ThemeKey = "coral";
+export const DEFAULT_THEME: ThemeKey = "tropical";
 
 export const THEME_BLOCK_KEY = "active_theme";
 

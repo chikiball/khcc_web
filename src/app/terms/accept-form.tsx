@@ -23,7 +23,7 @@ export function AcceptForm() {
           className="mt-0.5 size-5 accent-coral-500 shrink-0"
         />
         <span className="text-sm text-ink leading-relaxed">
-          I have read and understood the KHCC member agreement above, and I
+          I have read and understood the Burkam member agreement above, and I
           accept it. I understand that road cycling carries risk and that I
           ride at my own risk.
         </span>

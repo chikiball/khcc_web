@@ -12,7 +12,7 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-// Coral teardrop pin in the KHCC brand colour. Avoids Leaflet's default
+// Sky-blue teardrop pin in the Burkam brand colour. Avoids Leaflet's default
 // marker-icon assets which reference relative URLs that Next.js bundling
 // does not resolve cleanly.
 const PIN = L.divIcon({
@@ -20,8 +20,8 @@ const PIN = L.divIcon({
   html: `
     <div style="
       width:24px; height:24px;
-      background:#ec6e8a;
-      border:3px solid #fdfaf5;
+      background:#0ea5e9;
+      border:3px solid #ffffff;
       border-radius:50% 50% 50% 0;
       transform:rotate(-45deg);
       box-shadow:0 2px 4px rgba(0,0,0,0.35);
@@ -30,9 +30,9 @@ const PIN = L.divIcon({
   iconAnchor: [12, 24],
 });
 
-// Default centre when no pin is set yet — Singapore (the club's primary
-// region; revisit if KHCC expands geographically).
-const DEFAULT_CENTER: [number, number] = [1.2806, 103.8714];
+// Default centre when no pin is set yet — East Coast Park, Singapore
+// (Burkam's primary riding region — TMCR from ECP to Changi Village).
+const DEFAULT_CENTER: [number, number] = [1.310, 103.930];
 
 function ClickHandler({ onPick }: { onPick: (lat: number, lng: number) => void }) {
   useMapEvents({

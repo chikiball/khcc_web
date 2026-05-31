@@ -10,8 +10,8 @@ import { materializeSeries } from "@/lib/series";
  * ride creation. Pass as query param or X-Cron-Secret header.
  *
  * Recommended crontab (every Sunday at 03:00 SGT = 19:00 UTC Sat):
- *   0 19 * * 6 curl -s "https://khcc.nandharu.uk/api/cron/materialize-rides?secret=<CRON_SECRET>" \
- *              >> /var/log/khcc-cron.log 2>&1
+ *   0 19 * * 6 curl -s "https://burkam.nandharu.uk/api/cron/materialize-rides?secret=<CRON_SECRET>" \
+ *              >> /var/log/burkam-cron.log 2>&1
  *
  * Or run manually at any time — materialisation is idempotent.
  */

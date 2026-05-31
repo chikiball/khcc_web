@@ -64,6 +64,13 @@
       "when": 1779097444226,
       "tag": "0008_rare_scream",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1780000000000,
+      "tag": "0009_burkam_pace_seed",
+      "breakpoints": true
     }
   ]
 }

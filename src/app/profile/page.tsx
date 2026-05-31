@@ -157,7 +157,7 @@ export default async function ProfilePage({
             label="Strava handle"
             name="strava_handle"
             defaultValue={profile?.stravaHandle ?? ""}
-            placeholder="@khcc.rider — optional"
+            placeholder="@burkam.rider — optional"
           />
 
           <label className="block">
@@ -165,7 +165,7 @@ export default async function ProfilePage({
             <textarea
               name="bio"
               defaultValue={profile?.bio ?? ""}
-              placeholder="Anything you want the bunch to know."
+              placeholder="Anything you want the kampung to know."
               rows={3}
               className="w-full rounded-xl bg-white ring-1 ring-maroon-200 focus:ring-2 focus:ring-coral-400 px-4 py-3 text-base outline-none"
             />

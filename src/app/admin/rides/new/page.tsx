@@ -36,7 +36,7 @@ export default async function NewRidePage() {
   return (
     <main className="px-5 py-8 max-w-2xl mx-auto">
       <h1 className="font-display text-3xl font-bold">New ride</h1>
-      <p className="text-sm text-ink-soft mt-1">Chop chop. Set the basics, hit save.</p>
+      <p className="text-sm text-ink-soft mt-1">Set the basics, hit save.</p>
       <RideForm
         action={createRide}
         defaultPaceGroups={defaultPaceGroups}

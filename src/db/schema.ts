@@ -58,7 +58,7 @@ export const users = pgTable("users", {
   // matching pace card on each ride detail page.
   paceGroup: text("pace_group")
     .notNull()
-    .default("B")
+    .default("chill")
     .references(() => rideTypes.code, { onDelete: "no action" }),
   bike: text("bike"),
   stravaHandle: text("strava_handle"),

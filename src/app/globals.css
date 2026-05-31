@@ -1,49 +1,61 @@
 @import "tailwindcss";
 
-/* KHCC brand palette — derived from team kit photos in /image_src */
+/* Burkam brand palette — sky blue + white + pale green (East Coast / TMCR vibe).
+ *
+ * IMPORTANT (legacy token names): the @theme block keeps the token names
+ * `--color-coral-*`, `--color-maroon-*`, `--color-cream-*`, `--color-flash-*`
+ * inherited from the upstream KHCC fork. Their *values* have been
+ * redefined to the new palette but the names are kept so the dozens of
+ * `bg-coral-*` / `text-maroon-*` / `ring-coral-*` Tailwind utilities
+ * scattered across components don't have to change. Mentally read:
+ *   coral-*  → brand (sky blue)
+ *   maroon-* → ink / dark accents (slate)
+ *   cream-*  → paper / surfaces (near-white with a green wash)
+ *   flash-*  → hot accent (sunrise orange)
+ */
 @theme {
-  /* Primary — coral/hot pink, dominant jersey colour */
-  --color-coral-50:  #fdf2f5;
-  --color-coral-100: #fbe4eb;
-  --color-coral-200: #f6c6d3;
-  --color-coral-300: #f09cb1;
-  --color-coral-400: #ec6e8a;
-  --color-coral-500: #e64f72;
-  --color-coral-600: #d12d57;
-  --color-coral-700: #b01f47;
-  --color-coral-800: #921c40;
-  --color-coral-900: #7a1c3a;
+  /* Primary — sky blue, the dominant brand colour */
+  --color-coral-50:  #f0f9ff;
+  --color-coral-100: #e0f2fe;
+  --color-coral-200: #bae6fd;
+  --color-coral-300: #7dd3fc;
+  --color-coral-400: #38bdf8;
+  --color-coral-500: #0ea5e9;
+  --color-coral-600: #0284c7;
+  --color-coral-700: #0369a1;
+  --color-coral-800: #075985;
+  --color-coral-900: #0c4a6e;
 
-  /* Secondary — deep maroon, bib short colour */
-  --color-maroon-50:  #faf2f3;
-  --color-maroon-100: #f3dfe2;
-  --color-maroon-200: #e7bdc4;
-  --color-maroon-300: #d68f9b;
-  --color-maroon-400: #be5d70;
-  --color-maroon-500: #9c3d52;
-  --color-maroon-600: #7a2c40;
-  --color-maroon-700: #5b1f2a;
-  --color-maroon-800: #3d1620;
-  --color-maroon-900: #260e15;
+  /* Secondary — slate, for readable ink and dark accents */
+  --color-maroon-50:  #f8fafc;
+  --color-maroon-100: #f1f5f9;
+  --color-maroon-200: #e2e8f0;
+  --color-maroon-300: #cbd5e1;
+  --color-maroon-400: #94a3b8;
+  --color-maroon-500: #64748b;
+  --color-maroon-600: #475569;
+  --color-maroon-700: #334155;
+  --color-maroon-800: #1e293b;
+  --color-maroon-900: #0f172a;
 
-  /* Accent — coral red (Cervelo frame, "Rolling" / live state) */
-  --color-flash-500: #ff5b3f;
-  --color-flash-600: #e63f24;
+  /* Accent — sunrise orange, warm pop against the cool brand */
+  --color-flash-500: #fb923c;
+  --color-flash-600: #ea580c;
 
-  /* Cream — page background, paper feel */
-  --color-cream-50:  #fdfaf5;
-  --color-cream-100: #f9f2e6;
-  --color-cream-200: #f4ece0;
-  --color-cream-300: #ebdfca;
+  /* Cream — page background, with a very pale green wash */
+  --color-cream-50:  #ffffff;
+  --color-cream-100: #f7fdf9;
+  --color-cream-200: #ecfdf3;
+  --color-cream-300: #d1fae5;
 
   /* Brand semantic aliases */
-  --color-brand: var(--color-coral-400);
-  --color-brand-strong: var(--color-coral-600);
+  --color-brand: var(--color-coral-500);
+  --color-brand-strong: var(--color-coral-700);
   --color-ink: var(--color-maroon-800);
-  --color-ink-soft: var(--color-maroon-700);
+  --color-ink-soft: var(--color-maroon-600);
   --color-paper: var(--color-cream-200);
 
-  /* Type scale — tight, compact, "chop chop" */
+  /* Type scale */
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-display: "Bricolage Grotesque", "Inter", ui-sans-serif, system-ui, sans-serif;
 }
@@ -58,102 +70,102 @@ html, body {
 /* =========================================================================
  * Theme overrides
  * -------------------------------------------------------------------------
- * The @theme block above defines the default "Coral" palette. Each block
- * below remaps the SAME variable names to a different palette, activated
- * by setting `data-theme="<key>"` on <html>. Picker lives at /admin/theme;
- * registry of available themes is in src/lib/themes.ts.
+ * The @theme block above defines the default "Tropical" palette. Each
+ * block below remaps the SAME variable names to a different palette,
+ * activated by setting `data-theme="<key>"` on <html>. Picker lives at
+ * /admin/theme; registry of available themes is in src/lib/themes.ts.
  *
  * The CSS variables are referenced by every Tailwind utility (`bg-coral-500`
  * resolves to `background-color: var(--color-coral-500)`), so swapping the
  * data-theme attribute restyles the entire app instantly with no rebuild.
  * ========================================================================= */
 
-[data-theme="bright"] {
-  /* Magenta replaces coral — "we went bright" jersey */
-  --color-coral-50:  #fdf2f8;
-  --color-coral-100: #fce7f3;
-  --color-coral-200: #fbcfe8;
-  --color-coral-300: #f9a8d4;
-  --color-coral-400: #f472b6;
-  --color-coral-500: #ec4899;
-  --color-coral-600: #db2777;
-  --color-coral-700: #be185d;
-  --color-coral-800: #9d174d;
-  --color-coral-900: #831843;
+[data-theme="sunrise"] {
+  /* Warm orange replaces sky blue — early-morning ECP light */
+  --color-coral-50:  #fff7ed;
+  --color-coral-100: #ffedd5;
+  --color-coral-200: #fed7aa;
+  --color-coral-300: #fdba74;
+  --color-coral-400: #fb923c;
+  --color-coral-500: #f97316;
+  --color-coral-600: #ea580c;
+  --color-coral-700: #c2410c;
+  --color-coral-800: #9a3412;
+  --color-coral-900: #7c2d12;
 
-  /* Dark teal replaces maroon for ink + deep accents */
-  --color-maroon-50:  #f0fdfa;
-  --color-maroon-100: #ccfbf1;
-  --color-maroon-200: #99f6e4;
-  --color-maroon-300: #5eead4;
-  --color-maroon-400: #2dd4bf;
-  --color-maroon-500: #14b8a6;
-  --color-maroon-600: #0d9488;
-  --color-maroon-700: #115e59;
-  --color-maroon-800: #134e4a;
-  --color-maroon-900: #042f2e;
+  /* Warm brown ink */
+  --color-maroon-50:  #fafaf9;
+  --color-maroon-100: #f5f5f4;
+  --color-maroon-200: #e7e5e4;
+  --color-maroon-300: #d6d3d1;
+  --color-maroon-400: #a8a29e;
+  --color-maroon-500: #78716c;
+  --color-maroon-600: #57534e;
+  --color-maroon-700: #44403c;
+  --color-maroon-800: #292524;
+  --color-maroon-900: #1c1917;
 
-  /* Amber accent — for hot CTAs / wind warnings */
-  --color-flash-500: #f59e0b;
-  --color-flash-600: #d97706;
+  /* Hot pink accent for warnings / flash states */
+  --color-flash-500: #ec4899;
+  --color-flash-600: #db2777;
 
-  /* Pale yellow paper */
-  --color-cream-50:  #fffbeb;
-  --color-cream-100: #fef3c7;
-  --color-cream-200: #fde68a;
-  --color-cream-300: #fcd34d;
+  /* Sand-cream paper */
+  --color-cream-50:  #fffdf7;
+  --color-cream-100: #fef9ec;
+  --color-cream-200: #fdf3d8;
+  --color-cream-300: #f7e7b8;
 
   --color-brand: var(--color-coral-500);
   --color-brand-strong: var(--color-coral-700);
   --color-ink: var(--color-maroon-900);
   --color-ink-soft: var(--color-maroon-700);
-  --color-paper: var(--color-cream-50);
+  --color-paper: var(--color-cream-100);
 }
 
-[data-theme="sky"] {
-  /* Sky blue replaces coral */
-  --color-coral-50:  #f0f9ff;
-  --color-coral-100: #e0f2fe;
-  --color-coral-200: #bae6fd;
-  --color-coral-300: #7dd3fc;
-  --color-coral-400: #38bdf8;
-  --color-coral-500: #0ea5e9;
-  --color-coral-600: #0284c7;
-  --color-coral-700: #0369a1;
-  --color-coral-800: #075985;
-  --color-coral-900: #0c4a6e;
+[data-theme="lagoon"] {
+  /* Teal / aqua replaces sky blue */
+  --color-coral-50:  #f0fdfa;
+  --color-coral-100: #ccfbf1;
+  --color-coral-200: #99f6e4;
+  --color-coral-300: #5eead4;
+  --color-coral-400: #2dd4bf;
+  --color-coral-500: #14b8a6;
+  --color-coral-600: #0d9488;
+  --color-coral-700: #0f766e;
+  --color-coral-800: #115e59;
+  --color-coral-900: #134e4a;
 
-  /* Deep navy replaces maroon */
-  --color-maroon-50:  #eff6ff;
-  --color-maroon-100: #dbeafe;
-  --color-maroon-200: #bfdbfe;
-  --color-maroon-300: #93c5fd;
-  --color-maroon-400: #60a5fa;
-  --color-maroon-500: #3b82f6;
-  --color-maroon-600: #2563eb;
-  --color-maroon-700: #1d4ed8;
-  --color-maroon-800: #1e3a8a;
-  --color-maroon-900: #172554;
+  /* Deep ocean blue ink */
+  --color-maroon-50:  #f0f9ff;
+  --color-maroon-100: #e0f2fe;
+  --color-maroon-200: #bae6fd;
+  --color-maroon-300: #7dd3fc;
+  --color-maroon-400: #38bdf8;
+  --color-maroon-500: #0ea5e9;
+  --color-maroon-600: #0369a1;
+  --color-maroon-700: #075985;
+  --color-maroon-800: #0c4a6e;
+  --color-maroon-900: #082f49;
 
-  /* Coral red accent — kept from the Cervelo frame */
-  --color-flash-500: #ff5b3f;
-  --color-flash-600: #e63f24;
+  /* Coral pink accent */
+  --color-flash-500: #f43f5e;
+  --color-flash-600: #e11d48;
 
-  /* Pale blue paper */
-  --color-cream-50:  #f8fbff;
-  --color-cream-100: #eef5fc;
-  --color-cream-200: #dde8f5;
-  --color-cream-300: #c4d5ec;
+  /* Seafoam paper */
+  --color-cream-50:  #f7fefb;
+  --color-cream-100: #ecfdf5;
+  --color-cream-200: #d1fae5;
+  --color-cream-300: #a7f3d0;
 
-  --color-brand: var(--color-coral-500);
-  --color-brand-strong: var(--color-coral-700);
+  --color-brand: var(--color-coral-600);
+  --color-brand-strong: var(--color-coral-800);
   --color-ink: var(--color-maroon-900);
   --color-ink-soft: var(--color-maroon-700);
-  --color-paper: var(--color-cream-50);
+  --color-paper: var(--color-cream-100);
 }
 
 [data-theme="mono"] {
-  /* Slate replaces coral */
+  /* Slate replaces brand */
   --color-coral-50:  #f8fafc;
   --color-coral-100: #f1f5f9;
   --color-coral-200: #e2e8f0;

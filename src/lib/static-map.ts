@@ -18,7 +18,7 @@ import path from "node:path";
  */
 
 const TILE_SIZE = 256;
-const USER_AGENT = "KHCC-Web/0.1 (https://khcc.nandharu.uk)";
+const USER_AGENT = "Burkam-Web/0.1 (https://burkam.nandharu.uk)";
 const TILE_URL = (z: number, x: number, y: number) =>
   `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
 

@@ -22,7 +22,7 @@ export default async function TermsPage() {
     <main className="min-h-dvh bg-paper text-ink">
       <div className="max-w-2xl mx-auto px-6 py-10">
         <span className="inline-block hex-clip bg-coral-400 text-cream-50 px-5 py-1.5 text-[10px] font-bold tracking-widest">
-          KHCC
+          BURKAM
         </span>
         <h1 className="mt-6 font-display text-3xl font-bold leading-tight">
           {alreadyAccepted ? "Member agreement." : "Before we ride."}

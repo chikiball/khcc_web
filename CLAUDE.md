@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What the project is
 
-**KHCC Web** — a Progressive Web App for **Knock House Chop Chop** (cycling club). Fast-pace road cycling: show up, ride hard, coffee, go home. Replaces WhatsApp + spreadsheets for ride coordination.
+**Burkam Web** — a Progressive Web App for **Burkam** (Bubur Kampung Cycling). Chill weekend rides along TMCR from East Coast Park to Changi Village, mostly single-pace (occasionally multi-pace), stop for bubur kampung, head home. Replaces WhatsApp + spreadsheets for ride coordination.
 
-Deployed at `https://khcc.nandharu.uk`. Implementation snapshot: `docs/REQUIREMENTS_V2.html`. Original requirements: `docs/REQUIREMENTS.md` / `.html`.
+Deployed at `https://burkam.nandharu.uk`. Implementation snapshot: `docs/REQUIREMENTS_V2.html`. Original requirements: `docs/REQUIREMENTS.md` / `.html`. (Both documents reference the original KHCC fork the codebase was derived from — kept as-is for product history.)
 
 ## Commands
 
@@ -22,7 +22,7 @@ npm run db:migrate        # drizzle-kit: apply pending migrations
 npm run db:push           # push schema directly (dev shortcut, no migration file)
 npm run db:studio         # open Drizzle Studio GUI
 
-# One-off scripts (inside the container — docker exec khcc-web node node_modules/tsx/dist/cli.mjs scripts/<name>.ts)
+# One-off scripts (inside the container — docker exec burkam-web node node_modules/tsx/dist/cli.mjs scripts/<name>.ts)
 scripts/seed.ts                      # seed 3 sample rides with pace groups
 scripts/backfill-route-previews.ts   # generate static map preview images for existing GPX files
 scripts/send-test-email.ts <addr>    # test SMTP relay
@@ -31,7 +31,7 @@ scripts/send-test-email.ts <addr>    # test SMTP relay
 ## Architecture
 
 **Stack — fully self-hosted, zero managed dependencies:**
-Next.js 15 App Router + TypeScript strict · Tailwind v4 · **Postgres 16 in Docker** · **Drizzle ORM** · **Auth.js v5** (Google OAuth + email credentials) · Leaflet (OSM tiles) · Sharp (image resizing) · Nodemailer (Gmail SMTP relay) · Open-Meteo (weather) · `@ducanh2912/next-pwa`.
+Next.js 15 App Router + TypeScript strict · Tailwind v4 · **Postgres 16 in Docker** · **Drizzle ORM** · **Auth.js v5** (Google OAuth + email credentials) · Leaflet (OSM tiles) · Sharp (image resizing) · Nodemailer (Brevo SMTP relay) · Open-Meteo (weather) · `@ducanh2912/next-pwa`.
 
 No Supabase, no Vercel, no Resend, no Mapbox, no third-party identity service beyond Google OAuth at sign-in time.
 
@@ -65,7 +65,7 @@ canManageRides(role)   boolean — leader | organiser | admin
 
 **Auth.js tables** (managed by adapter): `users`, `accounts`, `verificationTokens`
 
-`users` is extended with KHCC profile fields: `role`, `status` (pending/approved/rejected), `paceGroup` (rider's preferred pace), `acceptedTermsAt`, `onboardedAt`, `bike`, `stravaHandle`, `bio`, `hideFromDirectory`.
+`users` is extended with Burkam profile fields: `role`, `status` (pending/approved/rejected), `paceGroup` (rider's preferred pace), `acceptedTermsAt`, `onboardedAt`, `bike`, `stravaHandle`, `bio`, `hideFromDirectory`.
 
 `users_private` — emergency contact (name + phone). Kept in a separate table so no query against `users` can accidentally leak it. Only join this table in admin-gated or self-only paths.
 
@@ -113,7 +113,7 @@ Rider names in any ride's RSVP list are clickable links to the profile.
 
 ## Terms / member agreement
 
-`/terms` — KHCC member agreement (13 sections, in `src/lib/terms.ts`). Required checkbox + Continue gate before onboarding. `users.accepted_terms_at` stamps on submit; the JWT carries `termsAccepted` and refreshes from DB while false.
+`/terms` — Burkam member agreement (13 sections, in `src/lib/terms.ts`). Required checkbox + Continue gate before onboarding. `users.accepted_terms_at` stamps on submit; the JWT carries `termsAccepted` and refreshes from DB while false.
 
 The page is also re-readable for accepted users — show a "Back to profile" link instead of the form, with the acceptance date displayed. Linked from `/profile` via "View member agreement".
 
@@ -158,12 +158,12 @@ Admin uploads a `.gpx` file when creating/editing a ride. Server:
 
 Members on the ride detail page see the polyline on the map, a "Download GPX ↓" link, and a "Route ↗" link for the Strava/external URL.
 
-## Email (SMTP via Gmail)
+## Email (SMTP via Brevo)
 
-Transactional emails use Nodemailer → Gmail app password (`khcc.cyclingclub@gmail.com`). Set in `.env` as `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`. Sent for:
+Transactional emails use Nodemailer → Brevo (formerly Sendinblue) so we can send from `noreply@burkam.nandharu.uk` with proper SPF/DKIM rather than relying on a Gmail relay. Set in `.env` as `SMTP_HOST=smtp-relay.brevo.com`, `SMTP_PORT=587`, `SMTP_USER` (Brevo account email), `SMTP_PASSWORD` (SMTP key from Brevo dashboard → SMTP & API), `SMTP_FROM`. The sending domain must be verified in Brevo first — they hand you SPF + DKIM TXT records to add at the DNS provider. Sent for:
 - Member approved / rejected / access removed (`src/app/admin/members/actions.ts`)
 
-Helper: `sendEmail()` + `emailTemplate()` in `src/lib/email.ts`.
+Helper: `sendEmail()` + `emailTemplate()` in `src/lib/email.ts`. Provider-agnostic — `nodemailer.createTransport({ host, port, auth })` works against any SMTP relay; switching providers is a pure env change.
 
 ## Content + Gallery CMS
 
@@ -178,17 +178,17 @@ Ride managers (`leader | organiser | admin`) can access `/admin/rides` but not t
 
 ## Deployment
 
-`khcc.nandharu.uk` on home server, behind a Cloudflare Tunnel → nginx-gateway → docker-compose on external `server-net`.
+`burkam.nandharu.uk` on home server, behind a Cloudflare Tunnel → nginx-gateway → docker-compose on external `server-net`.
 
 ```bash
 ./scripts/deploy.sh   # pulls, roles password sync, builds, migrates, starts
 ```
 
 Key env (on the server at `.env`):
-- `POSTGRES_PASSWORD`, `PGHOST=khcc-db`, `PGUSER`, `PGDATABASE` — DB via PG* vars (not DATABASE_URL, which mangles passwords with special chars)
+- `POSTGRES_PASSWORD`, `PGHOST=burkam-db`, `PGUSER`, `PGDATABASE` — DB via PG* vars (not DATABASE_URL, which mangles passwords with special chars)
 - `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `NEXT_PUBLIC_SITE_URL`
 - `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` — set once, passed as build arg AND runtime to keep action IDs stable across deploys
-- `SMTP_*` — Gmail relay for approval emails
+- `SMTP_*` — Brevo SMTP relay for transactional emails (sender domain must be verified in Brevo first)
 - `CRON_SECRET` — protects `/api/cron/materialize-rides`. Set once with `openssl rand -hex 32`, then recreate the container so the env propagates. Schedule the cron in host crontab (e.g. weekly).
 
 Migration runs automatically in `docker/entrypoint.sh` before Next.js boots. No manual step on deploy.
@@ -197,7 +197,7 @@ Migration runs automatically in `docker/entrypoint.sh` before Next.js boots. No 
 
 - Palette: `src/app/globals.css` `@theme` — coral pink `coral-*`, deep maroon `maroon-*`, coral red `flash-*`, cream `cream-*`. Semantic aliases: `brand`, `ink`, `paper`.
 - Fonts: Bricolage Grotesque (display/headings), Inter (body).
-- Hex-badge `.hex-clip` — pace badges, KHCC logo mark. **Pace badge always shows the letter** (NFR-6, never colour-only).
+- Hex-badge `.hex-clip` — pace badges, Burkam logo mark. **Pace badge always shows the letter** (NFR-6, never colour-only).
 - Avatar shape: `rounded-full` (circle). Hex stays on the pace badges and branded badges, not user photos.
 - Tap targets ≥ 44px (`button { min-height: 44px }` in globals — NFR-5, gloves).
 - Color presets for ride types: coral / maroon / flash / emerald / sky / amber. Defined in `src/lib/ride-types.ts` — add a new preset there (all Tailwind class strings must be literal for build to include them).
@@ -209,7 +209,7 @@ Migration runs automatically in `docker/entrypoint.sh` before Next.js boots. No 
 - Don't put `AUTH_SECRET`, `AUTH_GOOGLE_SECRET`, `POSTGRES_PASSWORD` in Dockerfile `ARG` — runtime only.
 - Don't select from `users_private` except in explicit admin/self-gated paths.
 - Don't trust the JWT for security mutations — fetch fresh role from DB in the Server Action.
-- Don't set `PGHOST=db` in docker-compose — use the container name `khcc-db` to avoid DNS collisions with other compose projects on the same `server-net` (this was the root cause of hours of password-mismatch debugging).
+- Don't set `PGHOST=db` in docker-compose — use the container name `burkam-db` to avoid DNS collisions with other compose projects on the same `server-net` (this was the root cause of hours of password-mismatch debugging in the original KHCC fork).
 - Don't reintroduce eager materialisation of recurring rides — the lazy approach is deliberate (member-list sanity + cleaner data).
 - Don't list every ride on `/admin/rides` — default to recent + future and disable RSC `prefetch` on the per-row Edit links. Wide row counts × Safari prefetch storms = self-DoS via the nginx rate-limit zone.
 - Don't use `localhost` in container healthchecks — Next.js binds IPv4 `0.0.0.0` only; `localhost` resolves to `::1` and the check fails forever. Use `127.0.0.1`.

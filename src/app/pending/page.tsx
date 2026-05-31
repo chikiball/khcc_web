@@ -31,7 +31,7 @@ export default async function PendingPage() {
     <main className="min-h-dvh flex flex-col items-center justify-center px-6 bg-paper text-ink">
       <div className="w-full max-w-md">
         <span className="inline-block hex-clip bg-coral-400 text-cream-50 px-5 py-1.5 text-[10px] font-bold tracking-widest">
-          KHCC
+          BURKAM
         </span>
 
         {user.status === "pending" ? (
@@ -45,7 +45,7 @@ export default async function PendingPage() {
               moment it happens.
             </p>
             <p className="mt-4 text-sm text-ink-soft">
-              Chop chop. Usually within a day.
+              Usually within a day.
             </p>
           </>
         ) : (
@@ -54,7 +54,7 @@ export default async function PendingPage() {
               We weren&apos;t able to approve you.
             </h1>
             <p className="mt-3 text-base text-ink-soft">
-              Sorry {user.name?.split(" ")[0] ?? "there"} — KHCC isn&apos;t the right
+              Sorry {user.name?.split(" ")[0] ?? "there"} — Burkam isn&apos;t the right
               fit for you right now.
             </p>
             {rejectedReason && (

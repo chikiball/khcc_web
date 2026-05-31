@@ -1,5 +1,5 @@
 /**
- * KHCC member agreement — adapted from the structure of Strava's Terms of
+ * Burkam member agreement — adapted from the structure of Strava's Terms of
  * Service (Jan 2026) and stripped to what actually fits a self-hosted
  * cycling-club tool: no payments, no advertising, no public profiles, no
  * live location tracking, no third-party integrations beyond Google sign-in.
@@ -10,7 +10,7 @@
  * (a future "you must re-accept the latest terms" flow can key off this).
  */
 
-export const TERMS_EFFECTIVE_DATE = "2026-05-18";
+export const TERMS_EFFECTIVE_DATE = "2026-05-31";
 
 export type TermsSection = { heading: string; body: string[] };
 
@@ -18,14 +18,14 @@ export const TERMS_SECTIONS: TermsSection[] = [
   {
     heading: "1. About this agreement",
     body: [
-      "These terms govern your use of the KHCC (Knock House Chop Chop) member site at khcc.nandharu.uk. By ticking the box at the bottom of this page you agree to them. If you don't agree, don't use the site.",
-      "KHCC is a private cycling club. The site is run by club volunteers, not a company. There is no fee, no subscription, no advertising, and your data is never sold.",
+      "These terms govern your use of the Burkam (Bubur Kampung Cycling) member site at burkam.nandharu.uk. By ticking the box at the bottom of this page you agree to them. If you don't agree, don't use the site.",
+      "Burkam is a private cycling group. The site is run by club volunteers, not a company. There is no fee, no subscription, no advertising, and your data is never sold.",
     ],
   },
   {
     heading: "2. Eligibility",
     body: [
-      "You must be at least 18 years old to ride with KHCC and to use this site. Road cycling carries real risk of injury or death, and only adults can give the informed consent that participation requires.",
+      "You must be at least 18 years old to ride with Burkam and to use this site. Road cycling carries real risk of injury or death, and only adults can give the informed consent that participation requires.",
     ],
   },
   {
@@ -66,7 +66,7 @@ export const TERMS_SECTIONS: TermsSection[] = [
     heading: "7. Cycling carries risk — you accept it",
     body: [
       "Road cycling is dangerous. Riders crash, get hit by vehicles, suffer mechanical failures, and are exposed to weather, traffic, and other road users.",
-      "By joining a KHCC ride you accept all risks of cycling and agree that KHCC, its ride leaders, organisers, admins, and other members are NOT responsible for injury, death, property damage, or any other loss to you, your bike, or third parties arising from your participation.",
+      "By joining a Burkam ride you accept all risks of cycling and agree that Burkam, its ride leaders, organisers, admins, and other members are NOT responsible for injury, death, property damage, or any other loss to you, your bike, or third parties arising from your participation.",
       "You are responsible for: your own fitness and skill level, the roadworthiness of your bike, wearing a helmet, riding within your limits, obeying road rules, and carrying your own insurance if you want it.",
       "Ride leaders volunteer their time. They are not professional guides, coaches, or medics. Their suggestions about pace, route, weather, or anything else are not professional advice.",
     ],
@@ -83,7 +83,7 @@ export const TERMS_SECTIONS: TermsSection[] = [
     heading: "9. Content you upload",
     body: [
       "You keep ownership of anything you upload — your profile photo, gallery photos, GPX routes, descriptions you write.",
-      "By uploading, you grant KHCC a non-exclusive, royalty-free licence to display that content within the member site for the purpose of running the club. We won't use your content outside that purpose. The licence ends when you delete the content (or your account).",
+      "By uploading, you grant Burkam a non-exclusive, royalty-free licence to display that content within the member site for the purpose of running the club. We won't use your content outside that purpose. The licence ends when you delete the content (or your account).",
       "Don't upload anything you don't have the right to upload — copyrighted images, other people's photos without consent, etc.",
     ],
   },
@@ -109,7 +109,7 @@ export const TERMS_SECTIONS: TermsSection[] = [
   {
     heading: "13. Contact",
     body: [
-      "Questions or requests: speak to a KHCC admin in person, or email khcc.cyclingclub@gmail.com.",
+      "Questions or requests: speak to a Burkam admin in person, or email hello@burkam.nandharu.uk.",
     ],
   },
 ];

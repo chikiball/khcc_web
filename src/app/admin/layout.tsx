@@ -31,7 +31,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="min-h-dvh bg-paper text-ink">
       <header className="px-5 pt-6 pb-4 flex items-center justify-between border-b border-maroon-200/40">
         <Link href="/admin/rides" className="font-display text-2xl font-bold tracking-tight">
-          KHCC <span className="text-coral-600">·</span> admin
+          Burkam <span className="text-coral-600">·</span> admin
         </Link>
 
         {/* Inline nav on tablet/desktop */}

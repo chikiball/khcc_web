@@ -1,27 +1,27 @@
-# khcc_web
+# burkam_web
 
-**Knock House Chop Chop** — a fast-pace road cycling club. PWA for ride coordination.
+**Burkam** (Bubur Kampung Cycling) — a chill cycling group along East Coast Park to Changi Village. PWA for ride coordination.
 
-Fully self-hosted, zero managed dependencies. Postgres + Auth.js + Next.js, all in Docker on a home server. Live at [khcc.nandharu.uk](https://khcc.nandharu.uk).
+Fully self-hosted, zero managed dependencies. Postgres + Auth.js + Next.js, all in Docker on a home server. Live at [burkam.nandharu.uk](https://burkam.nandharu.uk).
+
+This codebase is a fork of an earlier "KHCC Web" project — see `docs/REQUIREMENTS*.{md,html}` and `docs/STAGE1.md` for product history. Architecture, schema and feature set are the same; the rebrand changes copy, theme and infra naming.
 
 ## What's in it (Phase 1, shipped)
 
 - **Auth** — Google OAuth + email-credentials. Admin-approval queue. Auto-flip rejected → pending on re-sign-in.
 - **Member terms** — required risk-waiver / agreement before onboarding; re-readable from the profile.
 - **Onboarding** — name, photo, pace, bike, Strava handle, emergency contact (in a separate restricted table).
-- **Rides** — multi-pace event header (one ride, A + B + C all on the same row), per-pace leader / cap / overrides, per-pace cancellation.
+- **Rides** — single-pace by default, multi-pace supported (one ride, A + B + C all on the same row), per-pace leader / cap / overrides, per-pace cancellation.
 - **Recurring rides** — weekly / biweekly with **lazy materialisation** (one live future occurrence per series; cron spawns the next on cancel or completion).
-- **Maps + GPX** — Leaflet + OpenStreetMap. Tap-to-pin start point, GPX upload auto-fills distance + elevation, polyline overlay on detail map, downloadable GPX, and a server-rendered route preview image on the rides list.
+- **Maps + GPX** — Leaflet + OpenStreetMap, defaulted to East Coast / Changi. Tap-to-pin start point, GPX upload auto-fills distance + elevation, polyline overlay on detail map, downloadable GPX, and a server-rendered route preview image on the rides list.
 - **Weather** — Open-Meteo forecast pill on cards (icon + temp + wind chip when ≥ 20 km/h) and a full block on detail (sunrise/sunset, precip%).
 - **Member directory** — `/members` with search and pace filter; click any rider in an RSVP list to view their profile.
-- **Admin tools** — approval queue, role assignment, ride types catalogue (replaces the hardcoded A/B/C enum), landing-page CMS, gallery uploader.
+- **Admin tools** — approval queue, role assignment, ride types catalogue, landing-page CMS, gallery uploader, theme picker.
 - **PWA** — installable, conservative offline cache.
-
-What's deliberately **not** here yet: announcements, ride email reminders, waitlist, Strava integration, overseas trips, race calendar, live safety. See `docs/REQUIREMENTS_V2.html` for the full implementation status.
 
 ## Stack
 
-Next.js 15 (App Router) + TypeScript strict · Tailwind v4 · **Postgres 16 in Docker** · **Drizzle ORM** · **Auth.js v5** (Google + email-credentials) · Leaflet/OSM · Sharp · Nodemailer (Gmail) · Open-Meteo · `@ducanh2912/next-pwa`.
+Next.js 15 (App Router) + TypeScript strict · Tailwind v4 · **Postgres 16 in Docker** · **Drizzle ORM** · **Auth.js v5** (Google + email-credentials) · Leaflet/OSM · Sharp · Nodemailer (Brevo SMTP) · Open-Meteo · `@ducanh2912/next-pwa`.
 
 ## Local development
 
@@ -35,12 +35,13 @@ cp .env.example .env.local
 # AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET, NEXT_PUBLIC_SITE_URL.
 
 # 3. Start Postgres locally (Docker)
-docker run -d --name khcc-db-local \
-  -e POSTGRES_USER=khcc -e POSTGRES_PASSWORD=khcc -e POSTGRES_DB=khcc \
+docker run -d --name burkam-db-local \
+  -e POSTGRES_USER=burkam -e POSTGRES_PASSWORD=burkam -e POSTGRES_DB=burkam \
   -p 5432:5432 postgres:16-alpine
 
 # 4. Push schema + seed sample rides
 npm run db:push
+npx tsx scripts/seed-types.ts
 npx tsx scripts/seed.ts
 
 # 5. Run dev server
@@ -59,6 +60,7 @@ npm run dev
 | `npm run db:migrate` | Apply pending migrations |
 | `npm run db:push` | Push schema directly (dev shortcut, no migration file) |
 | `npm run db:studio` | Open Drizzle Studio (DB GUI) |
+| `npx tsx scripts/seed-types.ts` | Seed the default `chill` row in `ride_types` |
 | `npx tsx scripts/seed.ts` | Seed 3 sample rides (idempotent) |
 
 ## Google OAuth setup (one-time)
@@ -66,28 +68,28 @@ npm run dev
 1. Google Cloud Console → APIs & Services → Credentials → Create OAuth client ID (Web application).
 2. Authorised redirect URIs:
    - `http://localhost:3000/api/auth/callback/google` (local dev)
-   - `https://khcc.nandharu.uk/api/auth/callback/google` (prod)
+   - `https://burkam.nandharu.uk/api/auth/callback/google` (prod)
 3. Copy the Client ID and Client Secret into `.env.local` as `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET`.
 
 No third-party identity service. The only thing leaving your server is the OAuth handshake to Google, and only on sign-in.
 
 ## Deployment (home server)
 
-Target: `khcc.nandharu.uk`. Two containers on the existing `server-net` Docker network: `khcc-db` (Postgres 16) and `khcc-web` (Next.js).
+Target: `burkam.nandharu.uk`. Two containers on the existing `server-net` Docker network: `burkam-db` (Postgres 16) and `burkam-web` (Next.js).
 
 ```bash
 # On the home server, in the repo root:
 cp .env.example .env  # fill in the production secrets
 
 # First time only — drop the nginx snippet into the upstream nginx
-sudo cp nginx/khcc.conf /etc/nginx/conf.d/khcc.conf
+sudo cp nginx/burkam.conf /etc/nginx/conf.d/burkam.conf
 sudo nginx -t && sudo nginx -s reload
 
 # Subsequent deploys
 ./scripts/deploy.sh
 ```
 
-The deploy script brings up `db` first, waits for healthy, then builds and starts `khcc-web`. Migrations run automatically on container start (via `docker/entrypoint.sh`).
+The deploy script brings up `db` first, waits for healthy, then builds and starts `burkam-web`. Migrations run automatically on container start (via `docker/entrypoint.sh`).
 
 ### Cron — recurring-ride materialisation
 
@@ -97,17 +99,17 @@ Generate a secret, put it in `.env` as `CRON_SECRET`, recreate the web container
 # generate + persist the secret
 CS=$(openssl rand -hex 32)
 echo "CRON_SECRET=$CS" | sudo tee -a .env
-docker compose up -d khcc-web
+docker compose up -d burkam-web
 
 # crontab -e
-0 19 * * 6 curl -s "https://khcc.nandharu.uk/api/cron/materialize-rides?secret=$CRON_SECRET" >> /var/log/khcc-cron.log 2>&1
+0 19 * * 6 curl -s "https://burkam.nandharu.uk/api/cron/materialize-rides?secret=$CRON_SECRET" >> /var/log/burkam-cron.log 2>&1
 ```
 
 The endpoint is idempotent — safe to hit any time.
 
 ## Documentation
 
-- `docs/REQUIREMENTS.html` / `.md` — original V0.1 requirements (pre-implementation).
+- `docs/REQUIREMENTS.html` / `.md` — original V0.1 requirements (from the upstream KHCC project).
 - `docs/REQUIREMENTS_V2.html` — implementation snapshot: what shipped, what's planned, what's deferred.
 - `docs/STAGE1.md` — original Phase 1 implementation notes.
 - `CLAUDE.md` — architectural guide for any contributor (or AI assistant) working on the codebase.

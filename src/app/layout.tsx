@@ -13,14 +13,14 @@ const bricolage = Bricolage_Grotesque({
 });
 
 export const metadata: Metadata = {
-  title: { default: "KHCC", template: "%s · KHCC" },
-  description: "Knock House Chop Chop — fast-pace road cycling, ride and go home.",
-  applicationName: "KHCC",
+  title: { default: "Burkam", template: "%s · Burkam" },
+  description: "Bubur Kampung — chill weekend rides along East Coast & Changi.",
+  applicationName: "Burkam",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "KHCC",
+    title: "Burkam",
   },
   icons: {
     icon: [
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ec6e8a",
+  themeColor: "#0ea5e9",
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,

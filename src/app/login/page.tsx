@@ -12,10 +12,10 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
     <main className="min-h-dvh flex flex-col items-center justify-center px-6 py-10 bg-paper">
       <div className="w-full max-w-sm">
         <Link href="/" className="block text-center mb-8">
-          <span className="font-display text-3xl font-bold tracking-tight text-ink">KHCC</span>
+          <span className="font-display text-3xl font-bold tracking-tight text-ink">Burkam</span>
         </Link>
         <h1 className="text-2xl font-display font-semibold text-ink text-center mb-2">
-          Ride and go home.
+          Pedal, bubur, repeat.
         </h1>
         <p className="text-sm text-ink-soft text-center mb-8">
           New here? Pick how to sign in. An admin will review you. Already a
@@ -70,7 +70,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
         )}
 
         <p className="mt-8 text-xs text-ink-soft/70 text-center">
-          By signing in you agree to be a fast, friendly, helmet-on member of the bunch.
+          By signing in you agree to be a chill, friendly, helmet-on member of the kampung.
         </p>
       </div>
     </main>
