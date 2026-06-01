@@ -11,17 +11,18 @@ This codebase is a fork of an earlier "KHCC Web" project — see `docs/REQUIREME
 - **Auth** — Google OAuth + email-credentials. Admin-approval queue. Auto-flip rejected → pending on re-sign-in.
 - **Member terms** — required risk-waiver / agreement before onboarding; re-readable from the profile.
 - **Onboarding** — name, photo, pace, bike, Strava handle, emergency contact (in a separate restricted table).
-- **Rides** — single-pace by default, multi-pace supported (one ride, A + B + C all on the same row), per-pace leader / cap / overrides, per-pace cancellation.
+- **Rides** — single-pace by default (`chill`), multi-pace supported (one ride, multiple paces side-by-side), per-pace leader / cap / overrides, per-pace cancellation.
 - **Recurring rides** — weekly / biweekly with **lazy materialisation** (one live future occurrence per series; cron spawns the next on cancel or completion).
-- **Maps + GPX** — Leaflet + OpenStreetMap, defaulted to East Coast / Changi. Tap-to-pin start point, GPX upload auto-fills distance + elevation, polyline overlay on detail map, downloadable GPX, and a server-rendered route preview image on the rides list.
+- **Maps + GPX** — Leaflet on the client + Mapbox raster tiles (`mapbox/streets-v12` style by default), defaulted to East Coast / Changi. Tap-to-pin start point, GPX upload auto-fills distance + elevation, orange polyline overlay on detail map, downloadable GPX, server-rendered route preview image on the rides list. Self-closing `<trkpt/>` GPX accepted.
 - **Weather** — Open-Meteo forecast pill on cards (icon + temp + wind chip when ≥ 20 km/h) and a full block on detail (sunrise/sunset, precip%).
 - **Member directory** — `/members` with search and pace filter; click any rider in an RSVP list to view their profile.
-- **Admin tools** — approval queue, role assignment, ride types catalogue, landing-page CMS, gallery uploader, theme picker.
+- **Share for WhatsApp** — one-tap "Copy for WhatsApp" button on each ride detail page that copies a pre-formatted summary (date/time, location, distance, per-pace rider list with numbered names, join link) to the clipboard.
+- **Admin tools** — approval queue, role assignment, ride types catalogue, landing-page CMS, gallery uploader, theme picker (4 themes).
 - **PWA** — installable, conservative offline cache.
 
 ## Stack
 
-Next.js 15 (App Router) + TypeScript strict · Tailwind v4 · **Postgres 16 in Docker** · **Drizzle ORM** · **Auth.js v5** (Google + email-credentials) · Leaflet/OSM · Sharp · Nodemailer (Brevo SMTP) · Open-Meteo · `@ducanh2912/next-pwa`.
+Next.js 15 (App Router) + TypeScript strict · Tailwind v4 · **Postgres 16 in Docker** · **Drizzle ORM** · **Auth.js v5** (Google + email-credentials) · Leaflet + **Mapbox raster tiles** (OSM fallback for dev) · Sharp · Nodemailer (Brevo SMTP) · Open-Meteo · `@ducanh2912/next-pwa`.
 
 ## Local development
 
@@ -32,7 +33,9 @@ npm install
 # 2. Configure environment
 cp .env.example .env.local
 # Fill in: POSTGRES_PASSWORD, AUTH_SECRET (openssl rand -base64 32),
-# AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET, NEXT_PUBLIC_SITE_URL.
+# AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET, NEXT_PUBLIC_SITE_URL,
+# NEXT_PUBLIC_MAPBOX_TOKEN (URL-restricted to your origin),
+# MAPBOX_SERVER_TOKEN (no URL restriction — for server-side preview gen).
 
 # 3. Start Postgres locally (Docker)
 docker run -d --name burkam-db-local \
@@ -72,6 +75,19 @@ npm run dev
 3. Copy the Client ID and Client Secret into `.env.local` as `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET`.
 
 No third-party identity service. The only thing leaving your server is the OAuth handshake to Google, and only on sign-in.
+
+## Mapbox setup (one-time)
+
+Two tokens, both at [account.mapbox.com/access-tokens](https://account.mapbox.com/access-tokens/) — free tier covers 200k tile requests/month, plenty for a small club.
+
+| Token | Used by | URL restriction | Env var |
+|---|---|---|---|
+| **Public** | client-side Leaflet (`map-picker.tsx`) — embedded in JS bundle | `https://burkam.nandharu.uk/*` (recommended) | `NEXT_PUBLIC_MAPBOX_TOKEN` |
+| **Server** | server-side route-preview JPEG generation (`static-map.ts`) | **none** (server fetches send no Referer header) | `MAPBOX_SERVER_TOKEN` |
+
+The two-token split exists because URL-restricted tokens 403 on server-side fetches that have no `Referer` header. If you skip the server token, route preview JPEGs won't generate (the OSM fallback also 403s server-side under their tile-usage policy).
+
+Set both in `.env`. The public one needs to be a build arg too — `./scripts/deploy.sh` handles that automatically.
 
 ## Deployment (home server)
 

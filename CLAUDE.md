@@ -23,6 +23,7 @@ npm run db:push           # push schema directly (dev shortcut, no migration fil
 npm run db:studio         # open Drizzle Studio GUI
 
 # One-off scripts (inside the container — docker exec burkam-web node node_modules/tsx/dist/cli.mjs scripts/<name>.ts)
+scripts/seed-types.ts                # seed default `chill` + `pacy` rows in ride_types
 scripts/seed.ts                      # seed 3 sample rides with pace groups
 scripts/backfill-route-previews.ts   # generate static map preview images for existing GPX files
 scripts/send-test-email.ts <addr>    # test SMTP relay
@@ -33,7 +34,7 @@ scripts/send-test-email.ts <addr>    # test SMTP relay
 **Stack — fully self-hosted, zero managed dependencies:**
 Next.js 15 App Router + TypeScript strict · Tailwind v4 · **Postgres 16 in Docker** · **Drizzle ORM** · **Auth.js v5** (Google OAuth + email credentials) · Leaflet (Mapbox raster tiles, OSM fallback) · Sharp (image resizing) · Nodemailer (Brevo SMTP relay) · Open-Meteo (weather) · `@ducanh2912/next-pwa`.
 
-No Supabase, no Vercel, no Resend, no Mapbox, no third-party identity service beyond Google OAuth at sign-in time.
+No Supabase, no Vercel, no Resend, no third-party identity service beyond Google OAuth at sign-in time. Mapbox is used for map tiles only (free tier, easy to self-replace via the `TileLayer` URL); the rest is fully self-hosted.
 
 ## Auth flow
 
@@ -79,7 +80,7 @@ canManageRides(role)   boolean — leader | organiser | admin
 
 `ride_types` — admin-editable pace catalogue: code, name, description, color preset, position, active. Replaces the old hardcoded A/B/C enum.
 
-`content_blocks` — key-value admin CMS for the landing page ("about", "achievements").
+`content_blocks` — key-value admin CMS for the landing page. Currently surfaces "about" only; the "achievements" / trophy-case block is **parked** (hidden from both the public landing page and the admin content editor) and can be revived by removing `"achievements"` from `HIDDEN_BLOCK_KEYS` in `src/app/admin/content/page.tsx` and uncommenting the matching JSX block in `src/app/page.tsx`. The DB row is preserved either way.
 
 `gallery_photos` — admin-uploaded photos shown in the landing-page carousel.
 
@@ -144,7 +145,7 @@ Static map previews: generated server-side on GPX upload by `src/lib/static-map.
 
 `src/components/map-picker.tsx` — client component (dynamic-imported, `ssr: false`). Used in two ways:
 - **Admin ride form**: tap to drop a pin, fills lat/lng inputs. `src/components/location-fields.tsx` wraps it with the text inputs.
-- **Ride detail**: read-only map with a dark-blue polyline overlay when a GPX exists (`src/components/ride-detail-map.tsx`).
+- **Ride detail**: read-only map with an orange polyline overlay when a GPX exists (`src/components/ride-detail-map.tsx`).
 
 Tile source is **Mapbox raster** (`mapbox/streets-v12` style, swap to `outdoors-v12` or `satellite-streets-v12` in `MAPBOX_STYLE` if you want a different look).
 
@@ -164,7 +165,17 @@ Admin uploads a `.gpx` file when creating/editing a ride. Server:
 3. Saves raw file to `/uploads/routes/<rideId>.gpx`
 4. Generates a static map preview (best-effort — failure never blocks the save)
 
+The parser regex accepts both paired (`<trkpt>...</trkpt>`) and self-closing (`<trkpt ... />`) forms. Route-planner exports without elevation/time data emit the self-closing form; rejecting them was the cause of an early "Could not read any track points" failure.
+
 Members on the ride detail page see the polyline on the map, a "Download GPX ↓" link, and a "Route ↗" link for the Strava/external URL.
+
+## Sharing rides (Copy for WhatsApp)
+
+Ride detail page has a `📋 Copy for WhatsApp` button (`src/components/copy-ride-button.tsx`) that copies a pre-formatted plain-text summary to the clipboard for pasting into chat / SMS / email. Format builder is `buildRideShareText()` in `src/lib/share.ts`. Date/time is forced to `Asia/Singapore` regardless of the server's TZ. Cancelled paces are omitted from the share (still visible on the page); a fully cancelled ride prefixes the title with `❌ CANCELLED — `.
+
+## Form-validation errors
+
+Server actions on the new/edit ride form (`src/app/admin/rides/actions.ts`) distinguish user-input errors from real failures via a `FormError` class. The validation prelude (`parseRideInput`, `parsePaceGroups`, `maybeMergeGpx`) throws `FormError`; `createRide`/`updateRide` catch them and `redirect("?error=<msg>")` back to the form page, which renders an inline coral banner. Anything that isn't a `FormError` propagates as a real 500. Use the same pattern when adding new validation paths — naked `throw new Error(...)` produces an unhelpful "Application error" page in production because Next.js scrubs the original message.
 
 ## Email (SMTP via Brevo)
 
@@ -179,7 +190,7 @@ Admin-only pages under `/admin` (in the layout nav for `role=admin`):
 - `/admin/members` — approval queue (pending/approved/rejected tabs), remove access
 - `/admin/types` — add/edit/disable ride types with color presets
 - `/admin/rides` — ride list; `/admin/rides/new` + `/admin/rides/[id]/edit`
-- `/admin/content` — edit "About" + "Achievements" sections on the landing page
+- `/admin/content` — edit landing-page sections. Currently exposes the "About" block only ("achievements" is hidden via `HIDDEN_BLOCK_KEYS` until we revive the trophy case)
 - `/admin/gallery` — upload/delete/edit-alt photos for the landing carousel
 
 Ride managers (`leader | organiser | admin`) can access `/admin/rides` but not the other admin pages.
@@ -196,6 +207,8 @@ Key env (on the server at `.env`):
 - `POSTGRES_PASSWORD`, `PGHOST=burkam-db`, `PGUSER`, `PGDATABASE` — DB via PG* vars (not DATABASE_URL, which mangles passwords with special chars)
 - `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `NEXT_PUBLIC_SITE_URL`
 - `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` — set once, passed as build arg AND runtime to keep action IDs stable across deploys
+- `NEXT_PUBLIC_MAPBOX_TOKEN` — client-side Mapbox token, URL-restricted to your domain (build arg + runtime). Falls back to OSM if unset.
+- `MAPBOX_SERVER_TOKEN` — server-side Mapbox token for `static-map.ts`, **no URL restriction** (server fetches send no Referer). Runtime only.
 - `SMTP_*` — Brevo SMTP relay for transactional emails (sender domain must be verified in Brevo first)
 - `CRON_SECRET` — protects `/api/cron/materialize-rides`. Set once with `openssl rand -hex 32`, then recreate the container so the env propagates. Schedule the cron in host crontab (e.g. weekly).
 
@@ -203,12 +216,15 @@ Migration runs automatically in `docker/entrypoint.sh` before Next.js boots. No 
 
 ## Brand & UI
 
-- Palette: `src/app/globals.css` `@theme` — coral pink `coral-*`, deep maroon `maroon-*`, coral red `flash-*`, cream `cream-*`. Semantic aliases: `brand`, `ink`, `paper`.
+- Palette: `src/app/globals.css` `@theme` — sky-blue brand on a near-white paper with pale-green wash; sunrise-orange accent. Tailwind token names are inherited from the upstream KHCC fork (`coral-*`, `maroon-*`, `flash-*`, `cream-*`) but their *values* were redefined for Burkam — read `coral-*` as "brand", `maroon-*` as "ink", `cream-*` as "paper", `flash-*` as "hot accent". Don't rename the tokens; renaming would touch dozens of components for zero behaviour change.
+- Themes: `tropical` (default), `sunrise`, `lagoon`, `mono`. Picker at `/admin/theme` writes to `content_blocks.active_theme`; layout reads it and sets `<html data-theme="...">`. Add a theme by appending to `THEMES` in `src/lib/themes.ts` AND adding a `[data-theme="<key>"]` block in `globals.css`.
 - Fonts: Bricolage Grotesque (display/headings), Inter (body).
-- Hex-badge `.hex-clip` — pace badges, Burkam logo mark. **Pace badge always shows the letter** (NFR-6, never colour-only).
+- Hex-badge `.hex-clip` — pace badges only. The Burkam logo on the landing page is now a regular `<Image>` from `/icon-512.png`, not a hex clip. **Pace badge always shows the letter** (NFR-6, never colour-only).
 - Avatar shape: `rounded-full` (circle). Hex stays on the pace badges and branded badges, not user photos.
 - Tap targets ≥ 44px (`button { min-height: 44px }` in globals — NFR-5, gloves).
 - Color presets for ride types: coral / maroon / flash / emerald / sky / amber. Defined in `src/lib/ride-types.ts` — add a new preset there (all Tailwind class strings must be literal for build to include them).
+- Default pace catalogue: `chill` (single-pace, default), `pacy` (occasional faster bunch). Inherited `A` / `B` / `C` rows from the upstream fork are deactivated by migration `0009_burkam_pace_seed.sql`.
+- PWA icons (`public/icon-*.png`, `apple-icon.png`) regenerated from `burkam_logo.png` (committed at repo root) via sharp. Re-run the regen script if the logo changes.
 
 ## Don't
 
@@ -222,3 +238,8 @@ Migration runs automatically in `docker/entrypoint.sh` before Next.js boots. No 
 - Don't list every ride on `/admin/rides` — default to recent + future and disable RSC `prefetch` on the per-row Edit links. Wide row counts × Safari prefetch storms = self-DoS via the nginx rate-limit zone.
 - Don't use `localhost` in container healthchecks — Next.js binds IPv4 `0.0.0.0` only; `localhost` resolves to `::1` and the check fails forever. Use `127.0.0.1`.
 - Don't add features from Phase 2/3 (trips, Strava, races, leaderboard, live safety) — explicitly deferred. See `docs/REQUIREMENTS_V2.html` for the full status of every requirement.
+- Don't use a single URL-restricted Mapbox token for both client and server — server fetches have no Referer header and 403. Use the two-token pattern: `NEXT_PUBLIC_MAPBOX_TOKEN` (URL-restricted, public, build arg) for the client, `MAPBOX_SERVER_TOKEN` (no restriction, runtime only) for `static-map.ts`.
+- Don't fall back to OSM tiles in production — `tile.openstreetmap.org` 403s server-side fetches under their tile-usage policy. The fallback exists for dev convenience; prod must have a Mapbox token.
+- Don't `throw new Error("user message")` in admin server actions for validation. Use the `FormError` class — naked `Error` produces an unhelpful "Application error" 500 page in production because Next.js scrubs the original message for security.
+- Don't forget to regenerate static map preview JPEGs after changing the polyline colour or tile source — they're cached on disk indefinitely. `rm -f /app/public/uploads/routes/*-preview.jpg && backfill-route-previews.ts`.
+- Don't bake server-only secrets (`MAPBOX_SERVER_TOKEN`, `AUTH_SECRET`, `AUTH_GOOGLE_SECRET`, `POSTGRES_PASSWORD`, `SMTP_PASSWORD`) into Dockerfile `ARG`s — keep them as runtime `environment:` only so they don't end up in the build context or layers.
