@@ -264,3 +264,19 @@ export const galleryPhotos = pgTable("gallery_photos", {
 });
 
 export type GalleryPhoto = typeof galleryPhotos.$inferSelect;
+
+// ===========================================================================
+// Route library — admin-curated GPX tracks selectable from the ride form
+// ===========================================================================
+
+export const routeLibrary = pgTable("route_library", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull(),
+  description: text("description"),
+  distanceKm: numeric("distance_km", { precision: 6, scale: 2 }),
+  elevationM: integer("elevation_m"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  uploadedBy: text("uploaded_by").references(() => users.id, { onDelete: "set null" }),
+});
+
+export type RouteLibraryEntry = typeof routeLibrary.$inferSelect;

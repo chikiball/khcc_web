@@ -94,8 +94,10 @@ async function fetchTile(z: number, x: number, y: number): Promise<Buffer> {
 
 export async function generateRoutePreview(
   coords: [number, number][],
-  rideId: string,
+  id: string,
+  opts: { subdir?: string } = {},
 ): Promise<string> {
+  const subdir = opts.subdir ?? "routes";
   if (coords.length < 2) {
     throw new Error("Need at least 2 coordinates to render a preview.");
   }
@@ -177,9 +179,9 @@ export async function generateRoutePreview(
     .jpeg({ quality: 82, progressive: true, mozjpeg: true })
     .toBuffer();
 
-  const dir = path.join(process.cwd(), "public", "uploads", "routes");
+  const dir = path.join(process.cwd(), "public", "uploads", subdir);
   await mkdir(dir, { recursive: true });
-  const filename = `${rideId}-preview.jpg`;
+  const filename = `${id}-preview.jpg`;
   await writeFile(path.join(dir, filename), out);
-  return `/uploads/routes/${filename}`;
+  return `/uploads/${subdir}/${filename}`;
 }

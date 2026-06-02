@@ -27,13 +27,16 @@ export default async function NewRidePage({
   const manager = await requireRideManager();
   const { error } = await searchParams;
 
-  const [[managerProfile], leaders, rideTypes] = await Promise.all([
+  const [[managerProfile], leaders, rideTypes, libraryRoutes] = await Promise.all([
     db.select({ paceGroup: schema.users.paceGroup })
       .from(schema.users)
       .where(eq(schema.users.id, manager.id))
       .limit(1),
     getLeaders(),
     getRideTypes(),
+    db.select({ id: schema.routeLibrary.id, name: schema.routeLibrary.name })
+      .from(schema.routeLibrary)
+      .orderBy(asc(schema.routeLibrary.name)),
   ]);
 
   const activeTypes = rideTypes.filter((t) => t.active);
@@ -54,6 +57,7 @@ export default async function NewRidePage({
         defaultPaceGroups={defaultPaceGroups}
         leaders={leaders}
         rideTypes={rideTypes}
+        libraryRoutes={libraryRoutes}
         submitLabel="Create ride"
       />
     </main>

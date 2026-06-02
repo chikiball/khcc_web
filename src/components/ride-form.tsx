@@ -1,5 +1,6 @@
 import { LocationFields } from "@/components/location-fields";
 import { PaceGroupsEditor } from "@/components/pace-groups-editor";
+import { RouteSourcePicker, type LibraryRouteOption } from "@/components/route-source-picker";
 import type { RideTypeOption } from "@/lib/ride-types";
 import type { PaceGroupInput } from "@/app/admin/rides/actions";
 
@@ -23,6 +24,7 @@ export function RideForm({
   defaultPaceGroups,
   leaders,
   rideTypes,
+  libraryRoutes,
   submitLabel,
   readOnly,
 }: {
@@ -31,6 +33,7 @@ export function RideForm({
   defaultPaceGroups?: PaceGroupInput[];
   leaders: LeaderOption[];
   rideTypes: RideTypeOption[];
+  libraryRoutes?: LibraryRouteOption[];
   submitLabel: string;
   readOnly?: boolean;
 }) {
@@ -103,18 +106,7 @@ export function RideForm({
       />
 
       {!readOnly && (
-        <label className="block">
-          <span className="block text-sm font-medium text-ink mb-1">GPX file (optional)</span>
-          <input
-            type="file"
-            name="gpx"
-            accept=".gpx,application/gpx+xml,application/xml"
-            className="block w-full text-sm text-ink-soft file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-cream-100 file:text-ink hover:file:bg-cream-200 file:cursor-pointer"
-          />
-          <p className="text-xs text-ink-soft mt-1">
-            Replaces distance and elevation with values from the file. Strava → Export GPX.
-          </p>
-        </label>
+        <RouteSourcePicker libraryRoutes={libraryRoutes ?? []} />
       )}
 
       <label className="block">

@@ -1,5 +1,5 @@
 import sharp from "sharp";
-import { writeFile, mkdir } from "node:fs/promises";
+import { writeFile, mkdir, copyFile } from "node:fs/promises";
 import path from "node:path";
 
 const PUBLIC_ROOT = path.join(process.cwd(), "public", "uploads");
@@ -54,6 +54,40 @@ export async function saveRouteGpx(file: File, rideId: string): Promise<string> 
   await mkdir(dir, { recursive: true });
   const buffer = Buffer.from(await file.arrayBuffer());
   await writeFile(path.join(dir, `${rideId}.gpx`), buffer);
+  return `/uploads/routes/${rideId}.gpx`;
+}
+
+/**
+ * Save an uploaded .gpx file to /uploads/library/<libraryId>.gpx as-is.
+ * Used by the route library admin page.
+ */
+export async function saveLibraryGpx(file: File, libraryId: string): Promise<string> {
+  const name = file.name.toLowerCase();
+  if (!name.endsWith(".gpx")) {
+    throw new Error("Route file must end in .gpx.");
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error("GPX file is too big (5 MB max).");
+  }
+
+  const dir = path.join(PUBLIC_ROOT, "library");
+  await mkdir(dir, { recursive: true });
+  const buffer = Buffer.from(await file.arrayBuffer());
+  await writeFile(path.join(dir, `${libraryId}.gpx`), buffer);
+  return `/uploads/library/${libraryId}.gpx`;
+}
+
+/**
+ * Copy a previously-uploaded library GPX into the per-ride slot at
+ * /uploads/routes/<rideId>.gpx so the ride detail page can serve it
+ * via the existing convention. Throws if the source file is missing.
+ */
+export async function copyLibraryGpxToRide(libraryId: string, rideId: string): Promise<string> {
+  const src = path.join(PUBLIC_ROOT, "library", `${libraryId}.gpx`);
+  const destDir = path.join(PUBLIC_ROOT, "routes");
+  await mkdir(destDir, { recursive: true });
+  const dest = path.join(destDir, `${rideId}.gpx`);
+  await copyFile(src, dest);
   return `/uploads/routes/${rideId}.gpx`;
 }
 

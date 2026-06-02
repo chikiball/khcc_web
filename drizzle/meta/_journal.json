@@ -71,6 +71,13 @@
       "when": 1780000000000,
       "tag": "0009_burkam_pace_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1780417549165,
+      "tag": "0010_flat_pestilence",
+      "breakpoints": true
     }
   ]
 }

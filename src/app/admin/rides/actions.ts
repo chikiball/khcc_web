@@ -3,12 +3,14 @@
 import { db, schema } from "@/db";
 import { requireRideManager } from "@/lib/auth-helpers";
 import { parseGpx, parseGpxCoords } from "@/lib/gpx";
-import { saveRouteGpx } from "@/lib/upload";
+import { saveRouteGpx, copyLibraryGpxToRide } from "@/lib/upload";
 import { generateRoutePreview } from "@/lib/static-map";
 import { materializeSeries } from "@/lib/series";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { asc, eq, inArray } from "drizzle-orm";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -100,25 +102,62 @@ function rideRow(input: RideInput) {
   };
 }
 
-async function maybeMergeGpx(
+type GpxSource =
+  | { kind: "upload"; file: File; text: string }
+  | { kind: "library"; libraryId: string; text: string };
+
+async function maybeResolveGpxSource(
   formData: FormData,
   input: RideInput,
-): Promise<{ file: File; text: string } | null> {
+): Promise<GpxSource | null> {
   const file = formData.get("gpx");
-  if (!(file instanceof File) || file.size === 0) return null;
-  if (!file.name.toLowerCase().endsWith(".gpx")) throw new FormError("Route file must end in .gpx.");
-  if (file.size > 5 * 1024 * 1024) throw new FormError("GPX file is too big (5 MB max).");
-  const text = await file.text();
-  let parsed;
-  try {
-    parsed = parseGpx(text);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Could not parse GPX file.";
-    throw new FormError(msg);
+  // Upload wins if a real file came through (defensive — the picker should
+  // ensure only one source is submitted).
+  if (file instanceof File && file.size > 0) {
+    if (!file.name.toLowerCase().endsWith(".gpx")) throw new FormError("Route file must end in .gpx.");
+    if (file.size > 5 * 1024 * 1024) throw new FormError("GPX file is too big (5 MB max).");
+    const text = await file.text();
+    let parsed;
+    try {
+      parsed = parseGpx(text);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not parse GPX file.";
+      throw new FormError(msg);
+    }
+    input.distance_km = String(parsed.distanceKm);
+    input.elevation_m = String(parsed.elevationM);
+    return { kind: "upload", file, text };
   }
-  input.distance_km = String(parsed.distanceKm);
-  input.elevation_m = String(parsed.elevationM);
-  return { file, text };
+
+  const libraryId = String(formData.get("library_route_id") ?? "").trim();
+  if (libraryId) {
+    const [row] = await db
+      .select()
+      .from(schema.routeLibrary)
+      .where(eq(schema.routeLibrary.id, libraryId))
+      .limit(1);
+    if (!row) throw new FormError("Library route not found.");
+
+    const src = path.join(process.cwd(), "public", "uploads", "library", `${libraryId}.gpx`);
+    let text: string;
+    try {
+      text = await readFile(src, "utf8");
+    } catch {
+      throw new FormError("Library route file is missing on disk.");
+    }
+    let parsed;
+    try {
+      parsed = parseGpx(text);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not parse library GPX.";
+      throw new FormError(msg);
+    }
+    input.distance_km = String(parsed.distanceKm);
+    input.elevation_m = String(parsed.elevationM);
+    return { kind: "library", libraryId, text };
+  }
+
+  return null;
 }
 
 async function tryGeneratePreview(text: string, rideId: string): Promise<void> {
@@ -127,6 +166,15 @@ async function tryGeneratePreview(text: string, rideId: string): Promise<void> {
   } catch (err) {
     console.error("[route preview]", err instanceof Error ? err.message : err);
   }
+}
+
+async function persistGpxForRide(gpx: GpxSource, rideId: string): Promise<void> {
+  if (gpx.kind === "upload") {
+    await saveRouteGpx(gpx.file, rideId);
+  } else {
+    await copyLibraryGpxToRide(gpx.libraryId, rideId);
+  }
+  await tryGeneratePreview(gpx.text, rideId);
 }
 
 async function syncPaceGroups(
@@ -180,11 +228,11 @@ export async function createRide(formData: FormData) {
 
   let input: RideInput;
   let paceGroups: PaceGroupInput[];
-  let gpx: { file: File; text: string } | null;
+  let gpx: GpxSource | null;
   try {
     input = parseRideInput(formData);
     paceGroups = parsePaceGroups(formData);
-    gpx = await maybeMergeGpx(formData, input);
+    gpx = await maybeResolveGpxSource(formData, input);
   } catch (err) {
     if (err instanceof FormError) {
       redirect(`/admin/rides/new?error=${encodeURIComponent(err.message)}`);
@@ -223,8 +271,7 @@ export async function createRide(formData: FormData) {
     }).returning({ id: schema.rides.id });
     await syncPaceGroups(firstRide[0].id, paceGroups, "");
     if (gpx) {
-      await saveRouteGpx(gpx.file, firstRide[0].id);
-      await tryGeneratePreview(gpx.text, firstRide[0].id);
+      await persistGpxForRide(gpx, firstRide[0].id);
     }
 
     // Materialise additional occurrences for the next 4 weeks
@@ -244,8 +291,7 @@ export async function createRide(formData: FormData) {
   await syncPaceGroups(created.id, paceGroups, "");
 
   if (gpx) {
-    await saveRouteGpx(gpx.file, created.id);
-    await tryGeneratePreview(gpx.text, created.id);
+    await persistGpxForRide(gpx, created.id);
   }
 
   revalidatePath("/rides");
@@ -258,11 +304,11 @@ export async function updateRide(rideId: string, formData: FormData) {
 
   let input: RideInput;
   let paceGroups: PaceGroupInput[];
-  let gpx: { file: File; text: string } | null;
+  let gpx: GpxSource | null;
   try {
     input = parseRideInput(formData);
     paceGroups = parsePaceGroups(formData);
-    gpx = await maybeMergeGpx(formData, input);
+    gpx = await maybeResolveGpxSource(formData, input);
   } catch (err) {
     if (err instanceof FormError) {
       redirect(`/admin/rides/${rideId}/edit?error=${encodeURIComponent(err.message)}`);
@@ -278,8 +324,7 @@ export async function updateRide(rideId: string, formData: FormData) {
   await syncPaceGroups(rideId, paceGroups, manager.id);
 
   if (gpx) {
-    await saveRouteGpx(gpx.file, rideId);
-    await tryGeneratePreview(gpx.text, rideId);
+    await persistGpxForRide(gpx, rideId);
   }
 
   revalidatePath("/rides");

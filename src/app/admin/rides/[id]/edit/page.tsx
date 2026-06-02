@@ -38,7 +38,7 @@ export default async function EditRidePage({
   const series = seriesResult[0] ?? null;
   if (!ride) notFound();
 
-  const [paceGroups, leaders, rideTypes] = await Promise.all([
+  const [paceGroups, leaders, rideTypes, libraryRoutes] = await Promise.all([
     db.select().from(schema.ridePaceGroups)
       .where(eq(schema.ridePaceGroups.rideId, id))
       .orderBy(asc(schema.ridePaceGroups.position)),
@@ -46,6 +46,9 @@ export default async function EditRidePage({
       .from(schema.users)
       .where(inArray(schema.users.role, ["leader", "organiser", "admin"])),
     db.select().from(schema.rideTypes).orderBy(asc(schema.rideTypes.position)) as Promise<RideTypeOption[]>,
+    db.select({ id: schema.routeLibrary.id, name: schema.routeLibrary.name })
+      .from(schema.routeLibrary)
+      .orderBy(asc(schema.routeLibrary.name)),
   ]);
 
   const isCancelled = ride.status === "cancelled";
@@ -86,6 +89,7 @@ export default async function EditRidePage({
         action={action}
         leaders={leaders}
         rideTypes={rideTypes}
+        libraryRoutes={libraryRoutes}
         submitLabel="Save changes"
         readOnly={isCancelled}
         defaultPaceGroups={isCancelled ? defaultPaceGroups : defaultPaceGroups}
