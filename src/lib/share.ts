@@ -2,9 +2,10 @@
  * Build a WhatsApp-friendly plain-text summary of a ride. Used by the
  * "Copy for WhatsApp" button on the ride detail page.
  *
- * Date/time is formatted in Asia/Singapore regardless of the server's
- * timezone (the production container runs UTC by default, but the user
- * pasting this into WhatsApp wants SGT).
+ * Time formatting matches the rest of the app — uses the server's
+ * timezone (production runs UTC; datetime-local inputs are stored as
+ * server-local instants, so this round-trips back to the value the
+ * organiser typed in).
  */
 export function buildRideShareText(input: {
   siteUrl: string;
@@ -31,13 +32,13 @@ export function buildRideShareText(input: {
     weekday: "short",
     day: "numeric",
     month: "short",
-    timeZone: "Asia/Singapore",
+    timeZone: "UTC",
   });
   const timeStr = input.startsAt.toLocaleTimeString("en-GB", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
-    timeZone: "Asia/Singapore",
+    timeZone: "UTC",
   });
   lines.push(`📅 ${dateStr}, ${timeStr}`);
   lines.push(`📍 ${input.startPointName}`);
