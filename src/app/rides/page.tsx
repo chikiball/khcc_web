@@ -6,7 +6,7 @@ import { canManageRides, requireApproved } from "@/lib/auth-helpers";
 import { RideCard } from "@/components/ride-card";
 import { signOut } from "@/app/auth/actions";
 import { getRideForecast } from "@/lib/weather";
-import { and, asc, eq, gte, inArray, lte, ne } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, notInArray } from "drizzle-orm";
 import type { RideTypeOption } from "@/lib/ride-types";
 
 export const metadata = { title: "Rides" };
@@ -34,7 +34,7 @@ export default async function RidesPage() {
       series_rule: schema.rideSeries.rule,
     }).from(schema.rides)
       .leftJoin(schema.rideSeries, eq(schema.rideSeries.id, schema.rides.seriesId))
-      .where(and(gte(schema.rides.startsAt, now), lte(schema.rides.startsAt, horizon), ne(schema.rides.status, "cancelled")))
+      .where(and(gte(schema.rides.startsAt, now), lte(schema.rides.startsAt, horizon), notInArray(schema.rides.status, ["cancelled", "completed"])))
       .orderBy(schema.rides.startsAt),
     db.select().from(schema.rideTypes).orderBy(asc(schema.rideTypes.position)) as Promise<RideTypeOption[]>,
   ]);

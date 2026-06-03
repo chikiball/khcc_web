@@ -369,7 +369,7 @@ export default async function RideDetailPage({ params }: { params: Params }) {
                     </div>
                   </div>
 
-                  {!isCancelled && !isCancelledPace && (
+                  {!isCancelled && !isCancelledPace && !isCompleted && (
                     <RsvpButton rideId={ride.id} paceGroupId={pg.id} isInThisPace={isInThisPace} isInAnyPace={isInAnyPace} size="sm" />
                   )}
                 </div>
