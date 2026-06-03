@@ -24,7 +24,7 @@ const MIME: Record<string, string> = {
   gpx: "application/gpx+xml",
 };
 
-const ALLOWED_SUBDIRS = new Set(["avatars", "gallery", "routes"]);
+const ALLOWED_SUBDIRS = new Set(["avatars", "gallery", "routes", "library", "ride-photos"]);
 
 export async function GET(
   _req: NextRequest,
