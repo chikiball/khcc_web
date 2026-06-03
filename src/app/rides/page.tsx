@@ -105,6 +105,12 @@ export default async function RidesPage() {
       <div className="px-5 max-w-2xl mx-auto">
         <h1 className="font-display text-3xl font-bold mt-2">Next rides</h1>
         <p className="text-sm text-ink-soft mt-1">Hi {firstName} — here&apos;s the next 14 days.</p>
+        <Link
+          href="/rides/past"
+          className="inline-block mt-2 text-sm text-coral-700 hover:text-coral-800 underline-offset-4 hover:underline"
+        >
+          Past rides →
+        </Link>
       </div>
 
       <section className="px-5 mt-6 space-y-3 pb-16 max-w-2xl mx-auto">

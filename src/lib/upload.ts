@@ -36,6 +36,20 @@ export async function processGalleryPhoto(file: File, photoId: string): Promise<
 }
 
 /**
+ * Resize an uploaded ride-recap photo. Preserve aspect ratio (fit: inside)
+ * — landscapes and portraits both render naturally in the recap grid.
+ * Max dimension 1600 keeps file sizes small without losing detail.
+ */
+export async function processRidePhoto(file: File, photoId: string): Promise<string> {
+  return processImage(file, {
+    subdir: "ride-photos",
+    filename: `${photoId}.jpg`,
+    size: 1600,
+    fit: "inside",
+  });
+}
+
+/**
  * Save an uploaded .gpx route file to /uploads/routes/<rideId>.gpx as-is
  * (no resize, no transformation). Caller is expected to have parsed the
  * file already to extract distance/elevation; we just persist the raw

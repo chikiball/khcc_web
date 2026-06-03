@@ -1,10 +1,11 @@
 import { type NextRequest } from "next/server";
 import { db, schema } from "@/db";
 import { eq } from "drizzle-orm";
-import { materializeSeries } from "@/lib/series";
+import { autoCompletePastRides, materializeSeries } from "@/lib/series";
 
 /**
- * Cron endpoint — materialises upcoming occurrences for all active ride series.
+ * Cron endpoint — materialises upcoming occurrences for all active ride
+ * series AND flips past `scheduled` rides to `completed`.
  *
  * Protect with CRON_SECRET in .env so arbitrary callers cannot spam
  * ride creation. Pass as query param or X-Cron-Secret header.
@@ -13,7 +14,7 @@ import { materializeSeries } from "@/lib/series";
  *   0 19 * * 6 curl -s "https://burkam.nandharu.uk/api/cron/materialize-rides?secret=<CRON_SECRET>" \
  *              >> /var/log/burkam-cron.log 2>&1
  *
- * Or run manually at any time — materialisation is idempotent.
+ * Or run manually at any time — both sweeps are idempotent.
  */
 export async function GET(req: NextRequest) {
   const secret =
@@ -38,6 +39,15 @@ export async function GET(req: NextRequest) {
     totalCreated += created;
   }
 
-  console.log(`[cron/materialize-rides] series: ${activeSeries.length}, created: ${totalCreated}`);
-  return Response.json({ series: activeSeries.length, totalCreated, results });
+  const completed = await autoCompletePastRides();
+
+  console.log(
+    `[cron/materialize-rides] series: ${activeSeries.length}, created: ${totalCreated}, completed: ${completed}`,
+  );
+  return Response.json({
+    series: activeSeries.length,
+    totalCreated,
+    completed,
+    results,
+  });
 }

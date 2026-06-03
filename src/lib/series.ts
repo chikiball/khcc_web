@@ -1,5 +1,5 @@
 import { db, schema } from "@/db";
-import { and, asc, desc, eq, gt, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, lt } from "drizzle-orm";
 import type { RideSeries } from "@/db/schema";
 import type { PaceGroupInput } from "@/app/admin/rides/actions";
 
@@ -154,4 +154,22 @@ export async function materializeSeries(series: RideSeries): Promise<number> {
     .where(eq(schema.rideSeries.id, series.id));
 
   return 1;
+}
+
+/**
+ * Flip past `scheduled` rides to `completed`. Run from the cron alongside
+ * series materialisation so the rides list and `/rides/past` reflect what
+ * actually happened without admins having to mark each ride by hand.
+ *
+ * Buffer of 6 hours after `starts_at` covers a worst-case ride length —
+ * tighten if needed, but better to flip late than too early.
+ */
+export async function autoCompletePastRides(): Promise<number> {
+  const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000);
+  const flipped = await db
+    .update(schema.rides)
+    .set({ status: "completed", updatedAt: new Date() })
+    .where(and(eq(schema.rides.status, "scheduled"), lt(schema.rides.startsAt, cutoff)))
+    .returning({ id: schema.rides.id });
+  return flipped.length;
 }

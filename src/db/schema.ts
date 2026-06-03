@@ -168,6 +168,12 @@ export const rides = pgTable(
     cancelledAt: timestamp("cancelled_at", { mode: "date" }),
     cancelledBy: text("cancelled_by").references(() => users.id, { onDelete: "set null" }),
     cancelledReason: text("cancelled_reason"),
+    // Post-ride recap — written by a leader on the ride (or admin) after
+    // the ride is completed. Surfaced on the ride detail page and on the
+    // /rides/past archive.
+    recapNote: text("recap_note"),
+    recapBy: text("recap_by").references(() => users.id, { onDelete: "set null" }),
+    recapAt: timestamp("recap_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
@@ -280,3 +286,21 @@ export const routeLibrary = pgTable("route_library", {
 });
 
 export type RouteLibraryEntry = typeof routeLibrary.$inferSelect;
+
+// ===========================================================================
+// Ride photos — riders upload photos to a completed ride's recap
+// ===========================================================================
+
+export const ridePhotos = pgTable(
+  "ride_photos",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    rideId: text("ride_id").notNull().references(() => rides.id, { onDelete: "cascade" }),
+    uploadedBy: text("uploaded_by").references(() => users.id, { onDelete: "set null" }),
+    imageUrl: text("image_url").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("ride_photos_ride_id_idx").on(t.rideId)],
+);
+
+export type RidePhoto = typeof ridePhotos.$inferSelect;

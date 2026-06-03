@@ -10,9 +10,11 @@ import { RideDetailMap } from "@/components/ride-detail-map";
 import { RsvpButton } from "@/components/rsvp-button";
 import { CopyRideButton } from "@/components/copy-ride-button";
 import { PaceBadge } from "@/components/ride-card";
+import { RecapEditor } from "@/components/recap-editor";
+import { RidePhotoUploader, DeleteRidePhotoButton } from "@/components/ride-photo-uploader";
 import { colorClasses } from "@/lib/ride-types";
 import { buildRideShareText } from "@/lib/share";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 
 type Params = Promise<{ id: string }>;
 export const dynamic = "force-dynamic";
@@ -89,7 +91,40 @@ export default async function RideDetailPage({ params }: { params: Params }) {
 
   const start = new Date(ride.startsAt);
   const isCancelled = ride.status === "cancelled";
+  const isCompleted = ride.status === "completed";
   const totalRiders = rsvps.length;
+
+  // Recap data — only relevant for completed rides
+  const ridePhotos = isCompleted
+    ? await db
+        .select({
+          id: schema.ridePhotos.id,
+          imageUrl: schema.ridePhotos.imageUrl,
+          uploadedBy: schema.ridePhotos.uploadedBy,
+          uploaderName: schema.users.name,
+        })
+        .from(schema.ridePhotos)
+        .leftJoin(schema.users, eq(schema.users.id, schema.ridePhotos.uploadedBy))
+        .where(eq(schema.ridePhotos.rideId, id))
+        .orderBy(desc(schema.ridePhotos.createdAt))
+    : [];
+
+  let recapAuthorName: string | null = null;
+  if (isCompleted && ride.recapBy) {
+    const [author] = await db
+      .select({ name: schema.users.name })
+      .from(schema.users)
+      .where(eq(schema.users.id, ride.recapBy))
+      .limit(1);
+    recapAuthorName = author?.name ?? null;
+  }
+
+  // Auth gates for recap editing & photo upload
+  const isLeaderOnRide = paceGroups.some((pg) => pg.leaderId === user.id);
+  const canEditRecap = isCompleted && (isManager || isLeaderOnRide);
+  const userPhotoCount = ridePhotos.filter((p) => p.uploadedBy === user.id).length;
+  const PHOTO_CAP = 3;
+  const uploadsRemaining = Math.max(0, PHOTO_CAP - userPhotoCount);
 
   const shareText = buildRideShareText({
     siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "https://burkam.nandharu.uk",
@@ -201,6 +236,70 @@ export default async function RideDetailPage({ params }: { params: Params }) {
           <div className="mt-6">
             <RideDetailMap lat={Number(ride.startPointLat)} lng={Number(ride.startPointLng)} routeCoords={gpx?.coords} />
           </div>
+        )}
+
+        {/* Recap — only on completed rides */}
+        {isCompleted && (
+          <section className="mt-8 space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-ink-soft">
+              Recap
+            </h2>
+
+            {ride.recapNote || canEditRecap ? (
+              canEditRecap ? (
+                <RecapEditor
+                  rideId={ride.id}
+                  initialNote={ride.recapNote ?? null}
+                  authorName={recapAuthorName}
+                  authorAt={ride.recapAt ?? null}
+                />
+              ) : (
+                <div className="rounded-2xl bg-white ring-1 ring-maroon-200/60 p-4">
+                  <p className="text-sm text-ink whitespace-pre-wrap leading-relaxed">{ride.recapNote}</p>
+                  {(recapAuthorName || ride.recapAt) && (
+                    <p className="mt-2 text-xs text-ink-soft">
+                      {recapAuthorName && `— ${recapAuthorName}`}
+                      {ride.recapAt && (
+                        <span className="opacity-60">
+                          {" · "}
+                          {ride.recapAt.toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                        </span>
+                      )}
+                    </p>
+                  )}
+                </div>
+              )
+            ) : (
+              <p className="text-sm text-ink-soft italic">
+                No recap yet — a ride leader can post one.
+              </p>
+            )}
+
+            {/* Photo grid */}
+            {ridePhotos.length > 0 && (
+              <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {ridePhotos.map((photo) => {
+                  const canDelete = photo.uploadedBy === user.id || isManager;
+                  return (
+                    <li
+                      key={photo.id}
+                      className="relative aspect-square rounded-xl bg-cream-100 overflow-hidden ring-1 ring-maroon-200/60"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photo.imageUrl}
+                        alt={`Ride photo by ${photo.uploaderName ?? "rider"}`}
+                        className="absolute inset-0 size-full object-cover"
+                      />
+                      {canDelete && <DeleteRidePhotoButton photoId={photo.id} />}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            <RidePhotoUploader rideId={ride.id} uploadsRemaining={uploadsRemaining} />
+          </section>
         )}
 
         {/* Per-pace RSVP cards */}
