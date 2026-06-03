@@ -62,7 +62,7 @@ canManageRides(role)   boolean — leader | organiser | admin
 
 **Authorization:** application-level (no RLS). Every Server Action / Server Component gates via the helpers above and scopes DB queries by `user.id`. Never trust the JWT for security-critical mutations — re-read from DB at action time.
 
-## Schema (11 tables)
+## Schema (13 tables)
 
 **Auth.js tables** (managed by adapter): `users`, `accounts`, `verificationTokens`
 
@@ -72,13 +72,17 @@ canManageRides(role)   boolean — leader | organiser | admin
 
 `ride_series` — recurring-ride template: title, rule (`weekly` | `biweekly`), weekday, time_of_day, start point, defaults, `pace_groups_template` (JSON snapshot), `active`. **Lazy materialisation** keeps exactly one live future occurrence per series.
 
-`rides` — event header: title, starts_at, start_point (lat/lng), distance/elevation (defaults), route_url, description, `series_id` (nullable FK), status (scheduled/weather-watch/cancelled/completed), cancellation audit columns.
+`rides` — event header: title, starts_at, start_point (lat/lng), distance/elevation (defaults), route_url, description, `series_id` (nullable FK), status (scheduled/weather-watch/cancelled/completed), cancellation audit columns. **Recap columns** (`recap_note`, `recap_by`, `recap_at`) are populated post-ride by a leader/admin once the ride flips to `completed`.
 
 `ride_pace_groups` — **one or many per ride**, each with its own pace_code (FK → ride_types), leader, cap, distance/elevation overrides, notes, per-pace status (scheduled/cancelled). Unique on (ride_id, pace_code).
 
 `ride_rsvps` — (ride_id, user_id) PK → one pace per rider per ride. Has `pace_group_id` FK so RSVPs are tied to the specific pace chosen. Switching pace = upsert updates `pace_group_id`.
 
 `ride_types` — admin-editable pace catalogue: code, name, description, color preset, position, active. Replaces the old hardcoded A/B/C enum.
+
+`route_library` — admin-curated GPX tracks selectable from the ride form. Fields: id, name, description, distance_km, elevation_m, uploaded_by. The on-disk GPX lives at `/uploads/library/<id>.gpx`.
+
+`ride_photos` — recap photos attached to a completed ride. Cascade-deletes when the ride is removed. Uploaded by any approved member, capped at 3 per uploader per ride at the action layer. On-disk path: `/uploads/ride-photos/<id>.jpg`.
 
 `content_blocks` — key-value admin CMS for the landing page. Currently surfaces "about" only; the "achievements" / trophy-case block is **parked** (hidden from both the public landing page and the admin content editor) and can be revived by removing `"achievements"` from `HIDDEN_BLOCK_KEYS` in `src/app/admin/content/page.tsx` and uncommenting the matching JSX block in `src/app/page.tsx`. The DB row is preserved either way.
 
@@ -100,9 +104,38 @@ Series live in `ride_series` (`weekly` | `biweekly`). Implementation in `src/lib
 1. Sweeps stale future occurrences for the series — deletes any beyond the soonest non-cancelled one **that has no RSVPs** (the FK cascade drops pace groups + rsvps automatically).
 2. If no live future occurrence remains, generates the next date from the series template (pivot = latest existing ride's `starts_at`, or `now` if none) and inserts the ride + pace groups from the JSON template.
 
-Trigger points: cron at `/api/cron/materialize-rides` (protected by `CRON_SECRET`), series creation in admin, and ride/pace cancellation that takes the whole ride down. All idempotent.
+Trigger points: cron at `/api/cron/materialize-rides` (protected by `CRON_SECRET`), series creation in admin, and ride/pace cancellation that takes the whole ride down. All idempotent. The same cron endpoint also calls `autoCompletePastRides()` (see "Post-ride recap" below).
 
 **Don't reintroduce a 4-week-ahead horizon** — the original implementation pivoted from epoch when `materialize_through_at` was null, which generated thousands of historical rides on first run. The new code reads only `latest existing ride` as pivot and never `new Date(0)`.
+
+## Post-ride recap
+
+Once a ride flips to `status=completed`, the detail page grows a recap section: a leader-editable note (`rides.recap_note`) and a member-uploadable photo grid (`ride_photos`). Browse them all at `/rides/past`.
+
+**Completion paths** (any of):
+1. **Lazy-on-read** — first time anyone opens `/rides/<id>` after the ride's estimated end, `maybeAutoCompleteRide()` flips the status inline before render. No infra change, fastest in practice.
+2. **Cron** — `/api/cron/materialize-rides` also runs `autoCompletePastRides()` on every hit. Idempotent.
+3. **Manual button** — `/admin/rides/<id>/edit` shows "Mark as completed" for ride managers (`canManageRides`). Skips the wait when a leader just wants to post the recap immediately.
+
+The "estimated end" is **distance-based** (`estimateRideHours` in `src/lib/series.ts`): `max(2h, distance_km / 14)`, with a `4h` fallback when distance is null. 14 km/h is Burkam's chill-pace + bubur-stop average; the floor stops aggressive flips on very short rides. Tune the constants there if rides regularly run longer.
+
+**Recap UX:**
+- Leader recap: any leader on the ride (any pace) or admin/organiser. `RecapEditor` toggles between view + edit.
+- Photos: any approved member. Hard cap of 3 per uploader per ride enforced server-side in `uploadRidePhoto`. Delete is uploader-or-manager. Files served from `/uploads/ride-photos/<id>.jpg` (sharp-resized to max 1600 px, `fit: "inside"` to preserve aspect).
+- `/rides/past` lists completed rides desc — title, date, distance/elev, attendee count, photo count, recap snippet (140 chars).
+
+The Next-rides query at `/rides` excludes both `cancelled` AND `completed` — `notInArray(status, ["cancelled", "completed"])`. The detail page also hides the RSVP button on completed rides (defense-in-depth — RSVP-after-the-fact makes no sense). The `toggleRsvp` action itself isn't gated; the UI is the only enforcement.
+
+## Route library
+
+Admin-curated catalogue of GPX tracks the ride form can pick from instead of re-uploading the same file every weekend. Page at `/admin/routes` (admin-only, modeled on `/admin/gallery`).
+
+**On the ride form:** `<RouteSourcePicker>` (`src/components/route-source-picker.tsx`) shows a dropdown of library routes plus the existing file input. They're **mutually exclusive** — picking from the library clears the file input and vice versa, last action wins. The notice line below shows `📍 <name>` or `📁 <filename>` so the active source is unambiguous before submit.
+
+**Server flow** (`src/app/admin/rides/actions.ts → maybeResolveGpxSource`):
+- Upload wins if a file came through (defensive — the picker should ensure only one source).
+- Library: read `/uploads/library/<id>.gpx` from disk, parse for distance/elevation, return as the source.
+- Either way the resolved GPX is **copied** into the per-ride slot at `/uploads/routes/<rideId>.gpx`. The ride detail page is unchanged — it always loads from the per-ride slot. Copying (not symlinking) means deleting a library entry doesn't break already-saved rides.
 
 ## Member directory + profile
 
@@ -134,12 +167,16 @@ Falls back to no UI silently when the ride has no lat/lng, the date is in the pa
 
 User-uploaded files go to the host-side bind-mount `./uploads/`, accessible inside the container at `/app/public/uploads/`. Next.js standalone doesn't include these in its build manifest, so they're served by the route handler at `src/app/uploads/[...path]/route.ts`.
 
+The route handler enforces an explicit subdir allowlist (path-traversal defence). When you add a new subdir, **also add it to `ALLOWED_SUBDIRS` in that file**, otherwise the URL 404s and images render as broken-icons even though the file is on disk.
+
 Sub-directories:
 - `uploads/avatars/` — profile avatars, 512×512 JPEG (sharp resize)
 - `uploads/gallery/` — landing-page gallery photos, 1024×1024 JPEG (sharp)
-- `uploads/routes/` — GPX files (`<rideId>.gpx`) + static map previews (`<rideId>-preview.jpg`)
+- `uploads/routes/` — per-ride GPX (`<rideId>.gpx`) + static map previews (`<rideId>-preview.jpg`)
+- `uploads/library/` — admin-curated library GPXs (`<libraryId>.gpx`) + previews (`<libraryId>-preview.jpg`)
+- `uploads/ride-photos/` — recap photos (`<photoId>.jpg`), max 1600 px `fit: inside`
 
-Static map previews: generated server-side on GPX upload by `src/lib/static-map.ts` — stitches Mapbox tiles + SVG polyline overlay using sharp. Falls back to OSM tiles when `NEXT_PUBLIC_MAPBOX_TOKEN` is unset.
+Static map previews: generated server-side on GPX upload by `src/lib/static-map.ts` — stitches Mapbox tiles + SVG polyline overlay using sharp. Falls back to OSM tiles when `NEXT_PUBLIC_MAPBOX_TOKEN` is unset. The function takes an optional `subdir` argument so the same generator writes both ride previews (`routes/`) and library previews (`library/`).
 
 ## Maps (Leaflet + Mapbox)
 
@@ -159,11 +196,12 @@ Mapbox+OSM attribution must remain visible (Mapbox ToS + OSM policy). Polyline c
 
 ## GPX upload
 
-Admin uploads a `.gpx` file when creating/editing a ride. Server:
-1. Parses distance (Haversine) + elevation gain (summed positive deltas, 0.5m noise threshold) — `src/lib/gpx.ts`
-2. Overwrites the form's distance + elevation values (GPX always wins)
-3. Saves raw file to `/uploads/routes/<rideId>.gpx`
-4. Generates a static map preview (best-effort — failure never blocks the save)
+Admin uploads a `.gpx` file when creating/editing a ride **or** picks a pre-curated route from the library (see "Route library" above). Server:
+1. Resolves the source — file upload, library entry, or null (`maybeResolveGpxSource`).
+2. Parses distance (Haversine) + elevation gain (summed positive deltas, 0.5m noise threshold) — `src/lib/gpx.ts`
+3. Overwrites the form's distance + elevation values (GPX always wins)
+4. Saves raw file to `/uploads/routes/<rideId>.gpx` (upload → `saveRouteGpx`, library → `copyLibraryGpxToRide`)
+5. Generates a static map preview (best-effort — failure never blocks the save)
 
 The parser regex accepts both paired (`<trkpt>...</trkpt>`) and self-closing (`<trkpt ... />`) forms. Route-planner exports without elevation/time data emit the self-closing form; rejecting them was the cause of an early "Could not read any track points" failure.
 
@@ -171,7 +209,7 @@ Members on the ride detail page see the polyline on the map, a "Download GPX ↓
 
 ## Sharing rides (Copy for WhatsApp)
 
-Ride detail page has a `📋 Copy for WhatsApp` button (`src/components/copy-ride-button.tsx`) that copies a pre-formatted plain-text summary to the clipboard for pasting into chat / SMS / email. Format builder is `buildRideShareText()` in `src/lib/share.ts`. Date/time is forced to `Asia/Singapore` regardless of the server's TZ. Cancelled paces are omitted from the share (still visible on the page); a fully cancelled ride prefixes the title with `❌ CANCELLED — `.
+Ride detail page has a `📋 Copy for WhatsApp` button (`src/components/copy-ride-button.tsx`) that copies a pre-formatted plain-text summary to the clipboard for pasting into chat / SMS / email. Format builder is `buildRideShareText()` in `src/lib/share.ts`. **Time formatter is pinned to UTC** — same as the rest of the app's server-rendered `toLocaleString(undefined)` calls — so the share text matches what the organiser typed in the form. (Underlying gotcha: `datetime-local` strings are parsed as server-local time, and the production container runs UTC, so the stored instant doesn't actually correspond to Singapore wall-clock; pinning to UTC keeps the display consistent. If we ever fix the storage layer to be timezone-correct, flip this back to `Asia/Singapore` and add a backfill.) Cancelled paces are omitted from the share (still visible on the page); a fully cancelled ride prefixes the title with `❌ CANCELLED — `.
 
 ## Form-validation errors
 
@@ -189,7 +227,8 @@ Helper: `sendEmail()` + `emailTemplate()` in `src/lib/email.ts`. Provider-agnost
 Admin-only pages under `/admin` (in the layout nav for `role=admin`):
 - `/admin/members` — approval queue (pending/approved/rejected tabs), remove access
 - `/admin/types` — add/edit/disable ride types with color presets
-- `/admin/rides` — ride list; `/admin/rides/new` + `/admin/rides/[id]/edit`
+- `/admin/rides` — ride list; `/admin/rides/new` + `/admin/rides/[id]/edit`. Edit page has the **Mark as completed** button for ride managers when status is `scheduled`.
+- `/admin/routes` — route library (admin-only): name + description + GPX upload, list with edit + delete + per-route preview
 - `/admin/content` — edit landing-page sections. Currently exposes the "About" block only ("achievements" is hidden via `HIDDEN_BLOCK_KEYS` until we revive the trophy case)
 - `/admin/gallery` — upload/delete/edit-alt photos for the landing carousel
 
@@ -243,3 +282,5 @@ Migration runs automatically in `docker/entrypoint.sh` before Next.js boots. No 
 - Don't `throw new Error("user message")` in admin server actions for validation. Use the `FormError` class — naked `Error` produces an unhelpful "Application error" 500 page in production because Next.js scrubs the original message for security.
 - Don't forget to regenerate static map preview JPEGs after changing the polyline colour or tile source — they're cached on disk indefinitely. `rm -f /app/public/uploads/routes/*-preview.jpg && backfill-route-previews.ts`.
 - Don't bake server-only secrets (`MAPBOX_SERVER_TOKEN`, `AUTH_SECRET`, `AUTH_GOOGLE_SECRET`, `POSTGRES_PASSWORD`, `SMTP_PASSWORD`) into Dockerfile `ARG`s — keep them as runtime `environment:` only so they don't end up in the build context or layers.
+- Don't add a new `/uploads/<subdir>/` without also adding the subdir to `ALLOWED_SUBDIRS` in `src/app/uploads/[...path]/route.ts`. Files write fine but the URL 404s and you get broken-image icons everywhere — silent and confusing.
+- Don't restore the WhatsApp share's `timeZone: "Asia/Singapore"` without first fixing the underlying datetime-local storage. The current code intentionally pins to UTC so it matches the server-rendered `toLocaleString(undefined)` everywhere else; flipping just the share back to SGT will reintroduce the "ride at 7 AM, share says 3 PM" bug from the conversation history.

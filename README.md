@@ -14,10 +14,12 @@ This codebase is a fork of an earlier "KHCC Web" project — see `docs/REQUIREME
 - **Rides** — single-pace by default (`chill`), multi-pace supported (one ride, multiple paces side-by-side), per-pace leader / cap / overrides, per-pace cancellation.
 - **Recurring rides** — weekly / biweekly with **lazy materialisation** (one live future occurrence per series; cron spawns the next on cancel or completion).
 - **Maps + GPX** — Leaflet on the client + Mapbox raster tiles (`mapbox/streets-v12` style by default), defaulted to East Coast / Changi. Tap-to-pin start point, GPX upload auto-fills distance + elevation, orange polyline overlay on detail map, downloadable GPX, server-rendered route preview image on the rides list. Self-closing `<trkpt/>` GPX accepted.
+- **Route library** — admins curate reusable GPX tracks at `/admin/routes` (name + description + preview). Ride form has a dropdown alongside the file picker; mutually exclusive, last action wins. Selected library route is copied into the ride's slot so the detail page works unchanged.
+- **Post-ride recap** — once a ride is `completed` (auto-flipped from a distance-based estimate, or manually marked by a manager), the detail page shows a leader recap note plus a member-uploadable photo grid (3 photos per uploader per ride). Browse all completed rides at `/rides/past`.
 - **Weather** — Open-Meteo forecast pill on cards (icon + temp + wind chip when ≥ 20 km/h) and a full block on detail (sunrise/sunset, precip%).
 - **Member directory** — `/members` with search and pace filter; click any rider in an RSVP list to view their profile.
 - **Share for WhatsApp** — one-tap "Copy for WhatsApp" button on each ride detail page that copies a pre-formatted summary (date/time, location, distance, per-pace rider list with numbered names, join link) to the clipboard.
-- **Admin tools** — approval queue, role assignment, ride types catalogue, landing-page CMS, gallery uploader, theme picker (4 themes).
+- **Admin tools** — approval queue, role assignment, ride types catalogue, route library, landing-page CMS, gallery uploader, theme picker (4 themes).
 - **PWA** — installable, conservative offline cache.
 
 ## Stack
@@ -107,7 +109,7 @@ sudo nginx -t && sudo nginx -s reload
 
 The deploy script brings up `db` first, waits for healthy, then builds and starts `burkam-web`. Migrations run automatically on container start (via `docker/entrypoint.sh`).
 
-### Cron — recurring-ride materialisation
+### Cron — recurring-ride materialisation + auto-complete
 
 Generate a secret, put it in `.env` as `CRON_SECRET`, recreate the web container so the env propagates, then schedule the host crontab to hit the endpoint weekly:
 
@@ -121,7 +123,7 @@ docker compose up -d burkam-web
 0 19 * * 6 curl -s "https://burkam.nandharu.uk/api/cron/materialize-rides?secret=$CRON_SECRET" >> /var/log/burkam-cron.log 2>&1
 ```
 
-The endpoint is idempotent — safe to hit any time.
+The endpoint is idempotent — safe to hit any time. Each run does two passes: materialise the next occurrence of every active series, and flip past `scheduled` rides to `completed` (using a distance-based estimate, see `estimateRideHours` in `src/lib/series.ts`). The completion flip also runs lazily on `/rides/<id>` reads, so in practice the cron only catches rides nobody opened.
 
 ## Documentation
 
