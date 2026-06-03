@@ -8,7 +8,7 @@ import { generateRoutePreview } from "@/lib/static-map";
 import { materializeSeries } from "@/lib/series";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, and, eq, inArray } from "drizzle-orm";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -464,4 +464,16 @@ export async function stopSeries(seriesId: string) {
     .where(eq(schema.rideSeries.id, seriesId));
   revalidatePath("/admin/rides");
   redirect("/admin/rides");
+}
+
+export async function markRideCompleted(rideId: string) {
+  await requireRideManager();
+  await db
+    .update(schema.rides)
+    .set({ status: "completed", updatedAt: new Date() })
+    .where(and(eq(schema.rides.id, rideId), eq(schema.rides.status, "scheduled")));
+  revalidatePath("/rides");
+  revalidatePath("/rides/past");
+  revalidatePath(`/rides/${rideId}`);
+  redirect(`/rides/${rideId}`);
 }

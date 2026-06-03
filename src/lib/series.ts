@@ -161,15 +161,69 @@ export async function materializeSeries(series: RideSeries): Promise<number> {
  * series materialisation so the rides list and `/rides/past` reflect what
  * actually happened without admins having to mark each ride by hand.
  *
- * Buffer of 6 hours after `starts_at` covers a worst-case ride length —
- * tighten if needed, but better to flip late than too early.
+ * The cutoff per ride is distance-based: a chill Burkam ride averages
+ * ~14 km/h overall (moving + bubur stop), with a 2 h floor and a 4 h
+ * fallback when distance is unset. The same estimate also drives
+ * the lazy completion that runs on the ride detail page.
  */
+const KMH_OVERALL = 14;
+const MIN_RIDE_HOURS = 2;
+const FALLBACK_RIDE_HOURS = 4;
+
+export function estimateRideHours(distanceKm: number | string | null | undefined): number {
+  if (distanceKm == null) return FALLBACK_RIDE_HOURS;
+  const km = typeof distanceKm === "string" ? Number(distanceKm) : distanceKm;
+  if (!Number.isFinite(km) || km <= 0) return FALLBACK_RIDE_HOURS;
+  return Math.max(MIN_RIDE_HOURS, km / KMH_OVERALL);
+}
+
+export function isRideOverdue(
+  startsAt: Date,
+  distanceKm: number | string | null | undefined,
+): boolean {
+  const endsAt = new Date(startsAt.getTime() + estimateRideHours(distanceKm) * 60 * 60 * 1000);
+  return new Date() > endsAt;
+}
+
 export async function autoCompletePastRides(): Promise<number> {
-  const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000);
-  const flipped = await db
+  const now = new Date();
+  const candidates = await db
+    .select({
+      id: schema.rides.id,
+      startsAt: schema.rides.startsAt,
+      distanceKm: schema.rides.distanceKm,
+    })
+    .from(schema.rides)
+    .where(and(eq(schema.rides.status, "scheduled"), lt(schema.rides.startsAt, now)));
+
+  const overdueIds = candidates
+    .filter((r) => isRideOverdue(r.startsAt, r.distanceKm))
+    .map((r) => r.id);
+  if (!overdueIds.length) return 0;
+
+  await db
+    .update(schema.rides)
+    .set({ status: "completed", updatedAt: now })
+    .where(inArray(schema.rides.id, overdueIds));
+  return overdueIds.length;
+}
+
+/**
+ * Lazy-completion variant for hot paths like the ride detail page —
+ * flips a single ride if it's past its estimated end. Returns true if
+ * the status was updated (caller should reflect the new value locally).
+ */
+export async function maybeAutoCompleteRide(ride: {
+  id: string;
+  status: string;
+  startsAt: Date;
+  distanceKm: number | string | null | undefined;
+}): Promise<boolean> {
+  if (ride.status !== "scheduled") return false;
+  if (!isRideOverdue(ride.startsAt, ride.distanceKm)) return false;
+  await db
     .update(schema.rides)
     .set({ status: "completed", updatedAt: new Date() })
-    .where(and(eq(schema.rides.status, "scheduled"), lt(schema.rides.startsAt, cutoff)))
-    .returning({ id: schema.rides.id });
-  return flipped.length;
+    .where(eq(schema.rides.id, ride.id));
+  return true;
 }

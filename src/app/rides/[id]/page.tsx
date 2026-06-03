@@ -14,6 +14,7 @@ import { RecapEditor } from "@/components/recap-editor";
 import { RidePhotoUploader, DeleteRidePhotoButton } from "@/components/ride-photo-uploader";
 import { colorClasses } from "@/lib/ride-types";
 import { buildRideShareText } from "@/lib/share";
+import { maybeAutoCompleteRide } from "@/lib/series";
 import { and, asc, desc, eq } from "drizzle-orm";
 
 type Params = Promise<{ id: string }>;
@@ -41,6 +42,19 @@ export default async function RideDetailPage({ params }: { params: Params }) {
 
   const [ride] = await db.select().from(schema.rides).where(eq(schema.rides.id, id)).limit(1);
   if (!ride) notFound();
+
+  // Lazy completion: if the ride is past its estimated end, flip status
+  // before render so the recap surface unlocks without waiting on cron.
+  if (
+    await maybeAutoCompleteRide({
+      id: ride.id,
+      status: ride.status,
+      startsAt: ride.startsAt,
+      distanceKm: ride.distanceKm,
+    })
+  ) {
+    ride.status = "completed";
+  }
 
   const isManager = canManageRides(user.role);
 

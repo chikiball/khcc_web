@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { RideForm, type LeaderOption } from "@/components/ride-form";
 import type { RideTypeOption } from "@/lib/ride-types";
 import { CancelRideButton } from "@/components/cancel-ride-button";
-import { updateRide, stopSeries } from "../../actions";
+import { updateRide, stopSeries, markRideCompleted } from "../../actions";
 import type { PaceGroupInput } from "../../actions";
 import { PaceCancelButtons } from "@/components/pace-cancel-buttons";
 
@@ -108,6 +108,31 @@ export default async function EditRidePage({
 
       {!isCancelled && (
         <div className="mt-10 pt-6 border-t border-maroon-200/40 space-y-6">
+
+          {ride.status === "scheduled" && (
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-maroon-700">
+                Mark as completed
+              </h2>
+              <p className="text-sm text-ink-soft mt-1 mb-3">
+                Unlocks the recap section so leaders can post a note and members
+                can attach photos. The cron does this automatically a few hours
+                after the ride starts — use this to skip the wait.
+              </p>
+              <form action={markRideCompleted.bind(null, id)}>
+                <button type="submit"
+                  className="inline-flex items-center justify-center rounded-2xl bg-coral-500 hover:bg-coral-600 text-cream-50 px-5 py-2.5 text-sm font-semibold active:scale-[0.98] transition-transform">
+                  Mark completed
+                </button>
+              </form>
+            </div>
+          )}
+
+          {ride.status === "completed" && (
+            <p className="text-sm text-ink-soft">
+              ✓ This ride is marked completed — recap and photos are unlocked.
+            </p>
+          )}
 
           {series && series.active && (
             <div>
