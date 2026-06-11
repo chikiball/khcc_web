@@ -6,11 +6,33 @@ import { canManageRides, requireApproved } from "@/lib/auth-helpers";
 import { RideCard } from "@/components/ride-card";
 import { signOut } from "@/app/auth/actions";
 import { getRideForecast } from "@/lib/weather";
+import { autoCompletePastRides, materializeSeries } from "@/lib/series";
 import { and, asc, eq, gte, inArray, lte, notInArray } from "drizzle-orm";
 import type { RideTypeOption } from "@/lib/ride-types";
 
 export const metadata = { title: "Rides" };
 export const dynamic = "force-dynamic";
+
+/**
+ * Lazy-on-read keep-up: a series occurrence that completed (manual button,
+ * detail-page lazy flip, or auto-complete) is NOT a materialisation trigger,
+ * so without this the list goes empty after the last ride finishes until the
+ * host cron next fires. Sweep completed past rides + ensure each active series
+ * has its single live future occurrence on every list load — best-effort, a
+ * failure here must never blank the page.
+ */
+async function keepSeriesFresh() {
+  try {
+    await autoCompletePastRides();
+    const activeSeries = await db
+      .select()
+      .from(schema.rideSeries)
+      .where(eq(schema.rideSeries.active, true));
+    for (const series of activeSeries) await materializeSeries(series);
+  } catch (err) {
+    console.error("[rides] keepSeriesFresh failed", err);
+  }
+}
 
 async function findPreview(rideId: string): Promise<string | null> {
   const fp = path.join(process.cwd(), "public", "uploads", "routes", `${rideId}-preview.jpg`);
@@ -20,6 +42,8 @@ async function findPreview(rideId: string): Promise<string | null> {
 
 export default async function RidesPage() {
   const user = await requireApproved();
+
+  await keepSeriesFresh();
 
   const now = new Date();
   const horizon = new Date(now);

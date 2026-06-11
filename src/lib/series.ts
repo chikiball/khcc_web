@@ -104,8 +104,13 @@ export async function materializeSeries(series: RideSeries): Promise<number> {
   through.setDate(through.getDate() + SAFETY_HORIZON_DAYS);
 
   const dates = generateOccurrences(series, pivot, through);
-  if (dates.length === 0) return 0;
-  const date = dates[0];
+  // Pick the first occurrence that is genuinely in the future. Pivoting off
+  // the latest existing ride keeps the weekly/biweekly cadence stable, but if
+  // the series went dormant (cron off for a while) the on-cadence date nearest
+  // the pivot can already be in the past — skip those so we always surface a
+  // real upcoming ride rather than a stale back-dated one.
+  const date = dates.find((d) => d > now);
+  if (!date) return 0;
 
   // Idempotency — race-safe even if two cron runs collide.
   const existing = await db
