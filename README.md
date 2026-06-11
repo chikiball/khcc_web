@@ -12,7 +12,7 @@ This codebase is a fork of an earlier "KHCC Web" project — see `docs/REQUIREME
 - **Member terms** — required risk-waiver / agreement before onboarding; re-readable from the profile.
 - **Onboarding** — name, photo, pace, bike, Strava handle, emergency contact (in a separate restricted table).
 - **Rides** — single-pace by default (`chill`), multi-pace supported (one ride, multiple paces side-by-side), per-pace leader / cap / overrides, per-pace cancellation.
-- **Recurring rides** — weekly / biweekly with **lazy materialisation** (one live future occurrence per series; cron spawns the next on cancel or completion).
+- **Recurring rides** — weekly / biweekly with **lazy materialisation** (one live future occurrence per series). The next occurrence is spawned by cron, series creation, cancellation, and a lazy keep-up on every rides-list load — so the list never goes empty after a ride completes, even if cron is down. Each occurrence inherits the series' meeting point and a seed GPX, so every week gets the same route polyline, GPX download, and preview (not just week one).
 - **Maps + GPX** — Leaflet on the client + Mapbox raster tiles (`mapbox/streets-v12` style by default), defaulted to East Coast / Changi. Tap-to-pin start point, GPX upload auto-fills distance + elevation, orange polyline overlay on detail map, downloadable GPX, server-rendered route preview image on the rides list. Self-closing `<trkpt/>` GPX accepted.
 - **Route library** — admins curate reusable GPX tracks at `/admin/routes` (name + description + preview). Ride form has a dropdown alongside the file picker; mutually exclusive, last action wins. Selected library route is copied into the ride's slot so the detail page works unchanged.
 - **Post-ride recap** — once a ride is `completed` (auto-flipped from a distance-based estimate, or manually marked by a manager), the detail page shows a leader recap note plus a member-uploadable photo grid (3 photos per uploader per ride). Browse all completed rides at `/rides/past`.
@@ -123,7 +123,7 @@ docker compose up -d burkam-web
 0 19 * * 6 curl -s "https://burkam.nandharu.uk/api/cron/materialize-rides?secret=$CRON_SECRET" >> /var/log/burkam-cron.log 2>&1
 ```
 
-The endpoint is idempotent — safe to hit any time. Each run does two passes: materialise the next occurrence of every active series, and flip past `scheduled` rides to `completed` (using a distance-based estimate, see `estimateRideHours` in `src/lib/series.ts`). The completion flip also runs lazily on `/rides/<id>` reads, so in practice the cron only catches rides nobody opened.
+The endpoint is idempotent — safe to hit any time. Each run does two passes: materialise the next occurrence of every active series, and flip past `scheduled` rides to `completed` (using a distance-based estimate, see `estimateRideHours` in `src/lib/series.ts`). Both passes also run lazily on page reads — the completion flip on `/rides/<id>`, and a series keep-up on every `/rides` list load — so in practice the cron only catches rides nobody opened. The cron remains the safety net for when nobody's viewing the app.
 
 ## Documentation
 

@@ -70,7 +70,7 @@ canManageRides(role)   boolean — leader | organiser | admin
 
 `users_private` — emergency contact (name + phone). Kept in a separate table so no query against `users` can accidentally leak it. Only join this table in admin-gated or self-only paths.
 
-`ride_series` — recurring-ride template: title, rule (`weekly` | `biweekly`), weekday, time_of_day, start point, defaults, `pace_groups_template` (JSON snapshot), `active`. **Lazy materialisation** keeps exactly one live future occurrence per series.
+`ride_series` — recurring-ride template: title, rule (`weekly` | `biweekly`), weekday, time_of_day, start point, defaults, `pace_groups_template` (JSON snapshot), `active`. **Lazy materialisation** keeps exactly one live future occurrence per series. The route GPX is *not* a column — it's kept as a seed file on disk at `/uploads/routes/series-<id>.gpx` and copied into each occurrence (see "Series seed GPX").
 
 `rides` — event header: title, starts_at, start_point (lat/lng), distance/elevation (defaults), route_url, description, `series_id` (nullable FK), status (scheduled/weather-watch/cancelled/completed), cancellation audit columns. **Recap columns** (`recap_note`, `recap_by`, `recap_at`) are populated post-ride by a leader/admin once the ride flips to `completed`.
 
@@ -102,9 +102,14 @@ Series live in `ride_series` (`weekly` | `biweekly`). Implementation in `src/lib
 
 `materializeSeries(series)`:
 1. Sweeps stale future occurrences for the series — deletes any beyond the soonest non-cancelled one **that has no RSVPs** (the FK cascade drops pace groups + rsvps automatically).
-2. If no live future occurrence remains, generates the next date from the series template (pivot = latest existing ride's `starts_at`, or `now` if none) and inserts the ride + pace groups from the JSON template.
+2. If no live future occurrence remains, generates the next date from the series template (pivot = latest existing ride's `starts_at`, or `now` if none) and inserts the ride + pace groups from the JSON template. It picks the **first generated date strictly after `now`** — pivoting off the latest ride keeps the weekly/biweekly cadence stable, but if the series went dormant (cron off for a while) the nearest on-cadence date can already be in the past, so those are skipped to always surface a real upcoming ride.
+3. Copies the series' **seed GPX** into the new occurrence's per-ride slot and regenerates its static preview (best-effort — see "Series seed GPX" below).
 
-Trigger points: cron at `/api/cron/materialize-rides` (protected by `CRON_SECRET`), series creation in admin, and ride/pace cancellation that takes the whole ride down. All idempotent. The same cron endpoint also calls `autoCompletePastRides()` (see "Post-ride recap" below).
+Trigger points: cron at `/api/cron/materialize-rides` (protected by `CRON_SECRET`), series creation in admin, ride/pace cancellation that takes the whole ride down, and **lazy keep-up on every `/rides` load** (`keepSeriesFresh()` in `src/app/rides/page.tsx`). All idempotent. The same cron endpoint also calls `autoCompletePastRides()` (see "Post-ride recap" below).
+
+**Why the lazy keep-up exists:** completing a ride is **not** a materialisation trigger — only the four above are. Without `keepSeriesFresh()`, once the last occurrence flips to `completed` (and drops out of the `notInArray(status, ["cancelled","completed"])` list query) the next one isn't created until the host cron next fires, so the list goes empty in between. `keepSeriesFresh()` runs `autoCompletePastRides()` + `materializeSeries()` for every active series on each list load — self-healing regardless of how the prior occurrence ended or whether cron is running. It's best-effort (try/catch) so a failure there can never blank the page. The cron is still the safety net for when nobody's viewing the list.
+
+**Series seed GPX:** a `ride_series` row stores the meeting point, distance/elevation numbers, and external `route_url` — but **not** the GPX track. The route is kept as a "seed" file on disk at `/uploads/routes/series-<seriesId>.gpx` (helpers in `src/lib/upload.ts`: `saveSeriesSeedGpx`, `copySeriesSeedGpxToRide`, `seriesSeedExists`, `promoteRideGpxToSeriesSeed`). `createRide` writes the seed when a recurring ride is created with a GPX (upload or library); `materializeSeries` copies it into each new occurrence's `<rideId>.gpx` slot and regenerates the per-ride preview, so **every week inherits the same polyline + GPX download + preview**, not just week one. For series created before seeding existed, `materializeSeries` self-heals: if no seed exists it promotes a prior occurrence's on-disk GPX to the seed first. The `series-` filename prefix can't collide with per-ride `<rideId>.gpx` (both UUIDs), and lives in the already-allowlisted `routes/` subdir.
 
 **Don't reintroduce a 4-week-ahead horizon** — the original implementation pivoted from epoch when `materialize_through_at` was null, which generated thousands of historical rides on first run. The new code reads only `latest existing ride` as pivot and never `new Date(0)`.
 
@@ -172,7 +177,7 @@ The route handler enforces an explicit subdir allowlist (path-traversal defence)
 Sub-directories:
 - `uploads/avatars/` — profile avatars, 512×512 JPEG (sharp resize)
 - `uploads/gallery/` — landing-page gallery photos, 1024×1024 JPEG (sharp)
-- `uploads/routes/` — per-ride GPX (`<rideId>.gpx`) + static map previews (`<rideId>-preview.jpg`)
+- `uploads/routes/` — per-ride GPX (`<rideId>.gpx`) + static map previews (`<rideId>-preview.jpg`), plus recurring-series seed GPX (`series-<seriesId>.gpx`)
 - `uploads/library/` — admin-curated library GPXs (`<libraryId>.gpx`) + previews (`<libraryId>-preview.jpg`)
 - `uploads/ride-photos/` — recap photos (`<photoId>.jpg`), max 1600 px `fit: inside`
 
