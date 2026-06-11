@@ -1,5 +1,5 @@
 import sharp from "sharp";
-import { writeFile, mkdir, copyFile } from "node:fs/promises";
+import { writeFile, mkdir, copyFile, readFile } from "node:fs/promises";
 import path from "node:path";
 
 const PUBLIC_ROOT = path.join(process.cwd(), "public", "uploads");
@@ -103,6 +103,77 @@ export async function copyLibraryGpxToRide(libraryId: string, rideId: string): P
   const dest = path.join(destDir, `${rideId}.gpx`);
   await copyFile(src, dest);
   return `/uploads/routes/${rideId}.gpx`;
+}
+
+/**
+ * Series seed GPX — the canonical route for a recurring series, stored once
+ * at /uploads/routes/series-<seriesId>.gpx. `materializeSeries` copies it
+ * into each new occurrence's slot so every week gets the same map polyline,
+ * GPX download, and static preview (not just the first ride). The `series-`
+ * prefix can't collide with per-ride `<rideId>.gpx` files (both are UUIDs).
+ */
+const SERIES_SEED_PREFIX = "series-";
+
+function seriesSeedPath(seriesId: string): string {
+  return path.join(PUBLIC_ROOT, "routes", `${SERIES_SEED_PREFIX}${seriesId}.gpx`);
+}
+
+/** Persist the raw GPX text as a series' seed route. */
+export async function saveSeriesSeedGpx(text: string, seriesId: string): Promise<void> {
+  const dir = path.join(PUBLIC_ROOT, "routes");
+  await mkdir(dir, { recursive: true });
+  await writeFile(seriesSeedPath(seriesId), text, "utf8");
+}
+
+/** Whether a series already has a seed GPX on disk. */
+export async function seriesSeedExists(seriesId: string): Promise<boolean> {
+  try {
+    await readFile(seriesSeedPath(seriesId), "utf8");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Backfill a series' seed from an existing occurrence's per-ride GPX
+ * (/uploads/routes/<rideId>.gpx) — used for series created before seeding
+ * existed. Returns true if a seed was written. Best-effort, never throws.
+ */
+export async function promoteRideGpxToSeriesSeed(
+  rideId: string,
+  seriesId: string,
+): Promise<boolean> {
+  const src = path.join(PUBLIC_ROOT, "routes", `${rideId}.gpx`);
+  try {
+    const text = await readFile(src, "utf8");
+    await mkdir(path.join(PUBLIC_ROOT, "routes"), { recursive: true });
+    await writeFile(seriesSeedPath(seriesId), text, "utf8");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Copy a series' seed GPX into the per-ride slot at /uploads/routes/<rideId>.gpx.
+ * Returns the raw GPX text on success (caller regenerates the preview from it),
+ * or null when the series has no seed on disk (best-effort, never throws).
+ */
+export async function copySeriesSeedGpxToRide(
+  seriesId: string,
+  rideId: string,
+): Promise<string | null> {
+  const src = seriesSeedPath(seriesId);
+  try {
+    const text = await readFile(src, "utf8");
+    const dir = path.join(PUBLIC_ROOT, "routes");
+    await mkdir(dir, { recursive: true });
+    await copyFile(src, path.join(dir, `${rideId}.gpx`));
+    return text;
+  } catch {
+    return null;
+  }
 }
 
 async function processImage(

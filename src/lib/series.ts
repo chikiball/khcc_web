@@ -2,6 +2,9 @@ import { db, schema } from "@/db";
 import { and, asc, desc, eq, gt, inArray, lt } from "drizzle-orm";
 import type { RideSeries } from "@/db/schema";
 import type { PaceGroupInput } from "@/app/admin/rides/actions";
+import { copySeriesSeedGpxToRide, promoteRideGpxToSeriesSeed, seriesSeedExists } from "@/lib/upload";
+import { generateRoutePreview } from "@/lib/static-map";
+import { parseGpxCoords } from "@/lib/gpx";
 
 /**
  * Lazy materialisation: a recurring series only ever has ONE live future
@@ -151,6 +154,35 @@ export async function materializeSeries(series: RideSeries): Promise<number> {
         position: pg.position ?? i,
       })),
     );
+  }
+
+  // Carry the series' seed route into this occurrence's per-ride slot so the
+  // map polyline, GPX download, and static preview match week one. Best-effort:
+  // a missing seed (series created without a GPX) or preview failure must never
+  // block materialisation.
+  //
+  // Self-heal for series created before seeding existed: if there's no seed but
+  // a prior occurrence has a GPX on disk, promote it to the seed first.
+  if (!(await seriesSeedExists(series.id))) {
+    const prior = await db
+      .select({ id: schema.rides.id })
+      .from(schema.rides)
+      .where(eq(schema.rides.seriesId, series.id))
+      .orderBy(desc(schema.rides.startsAt));
+    for (const p of prior) {
+      if (p.id === ride.id) continue;
+      if (await promoteRideGpxToSeriesSeed(p.id, series.id)) break;
+    }
+  }
+
+  const gpxText = await copySeriesSeedGpxToRide(series.id, ride.id);
+  if (gpxText) {
+    try {
+      const coords = parseGpxCoords(gpxText);
+      if (coords.length >= 2) await generateRoutePreview(coords, ride.id);
+    } catch (err) {
+      console.error("[series] preview generation failed", err);
+    }
   }
 
   await db

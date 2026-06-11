@@ -3,7 +3,7 @@
 import { db, schema } from "@/db";
 import { requireRideManager } from "@/lib/auth-helpers";
 import { parseGpx, parseGpxCoords } from "@/lib/gpx";
-import { saveRouteGpx, copyLibraryGpxToRide } from "@/lib/upload";
+import { saveRouteGpx, copyLibraryGpxToRide, saveSeriesSeedGpx } from "@/lib/upload";
 import { generateRoutePreview } from "@/lib/static-map";
 import { materializeSeries } from "@/lib/series";
 import { revalidatePath } from "next/cache";
@@ -272,6 +272,9 @@ export async function createRide(formData: FormData) {
     await syncPaceGroups(firstRide[0].id, paceGroups, "");
     if (gpx) {
       await persistGpxForRide(gpx, firstRide[0].id);
+      // Seed the series with this route so every future occurrence inherits
+      // the same GPX (map polyline + download + preview), not just week one.
+      await saveSeriesSeedGpx(gpx.text, series.id);
     }
 
     // Materialise additional occurrences for the next 4 weeks
