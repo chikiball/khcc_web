@@ -9,8 +9,25 @@ import { eq } from "drizzle-orm";
 
 const CODE_PATTERN = /^[A-Za-z0-9]{1,8}$/;
 
+/**
+ * Marker class for validation errors that should be surfaced inline on the
+ * form rather than as a generic 500 page. Naked `throw new Error` produces an
+ * unhelpful "Application error" page in production (Next.js scrubs the message)
+ * — same pattern as src/app/admin/rides/actions.ts.
+ */
+class FormError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FormError";
+  }
+}
+
 function parseInput(formData: FormData) {
-  const code = String(formData.get("code") ?? "").trim().toUpperCase();
+  // Codes are stored as typed (trimmed only) — do NOT force-uppercase. Burkam's
+  // catalogue uses lowercase word codes (`chill`, `pacy`); uppercasing here made
+  // every update of those rows fail the immutable-code guard in updateRideType
+  // ("CHILL" !== "chill") and crash with a generic 500.
+  const code = String(formData.get("code") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim() || null;
   const color = String(formData.get("color") ?? "coral");
@@ -19,11 +36,11 @@ function parseInput(formData: FormData) {
   const active = formData.get("active") === "on";
 
   if (!CODE_PATTERN.test(code)) {
-    throw new Error("Code must be 1–8 letters or digits.");
+    throw new FormError("Code must be 1–8 letters or digits.");
   }
-  if (!name) throw new Error("Name is required.");
+  if (!name) throw new FormError("Name is required.");
   if (!COLOR_KEYS.includes(color as (typeof COLOR_KEYS)[number])) {
-    throw new Error("Invalid color.");
+    throw new FormError("Invalid color.");
   }
 
   return { code, name, description, color, position, active };
@@ -31,7 +48,16 @@ function parseInput(formData: FormData) {
 
 export async function createRideType(formData: FormData) {
   await requireAdmin();
-  const input = parseInput(formData);
+
+  let input: ReturnType<typeof parseInput>;
+  try {
+    input = parseInput(formData);
+  } catch (err) {
+    if (err instanceof FormError) {
+      redirect(`/admin/types?error=${encodeURIComponent(err.message)}`);
+    }
+    throw err;
+  }
 
   await db.insert(schema.rideTypes).values(input);
 
@@ -42,13 +68,21 @@ export async function createRideType(formData: FormData) {
 
 export async function updateRideType(code: string, formData: FormData) {
   await requireAdmin();
-  const input = parseInput(formData);
 
-  // Code is the primary key — disallow renaming via this action so existing
-  // rides + users keep their FK pointing somewhere valid. To "rename", admin
-  // creates a new type and migrates rows by hand (rare).
-  if (input.code !== code) {
-    throw new Error("Code cannot be changed once the type exists.");
+  let input: ReturnType<typeof parseInput>;
+  try {
+    input = parseInput(formData);
+    // Code is the primary key — disallow renaming via this action so existing
+    // rides + users keep their FK pointing somewhere valid. To "rename", admin
+    // creates a new type and migrates rows by hand (rare).
+    if (input.code !== code) {
+      throw new FormError("Code cannot be changed once the type exists.");
+    }
+  } catch (err) {
+    if (err instanceof FormError) {
+      redirect(`/admin/types?error=${encodeURIComponent(err.message)}`);
+    }
+    throw err;
   }
 
   await db
@@ -83,8 +117,10 @@ export async function deleteRideType(code: string) {
     .limit(1);
 
   if (paceUse || userUse) {
-    throw new Error(
-      "Cannot delete — ride pace groups or users still use this type. Mark it inactive instead.",
+    redirect(
+      `/admin/types?error=${encodeURIComponent(
+        "Cannot delete — ride pace groups or users still use this type. Mark it inactive instead.",
+      )}`,
     );
   }
 

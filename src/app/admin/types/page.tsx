@@ -7,7 +7,7 @@ import { createRideType, updateRideType, deleteRideType } from "./actions";
 export const metadata = { title: "Ride types" };
 export const dynamic = "force-dynamic";
 
-type SearchParams = Promise<{ saved?: string }>;
+type SearchParams = Promise<{ saved?: string; error?: string }>;
 
 export default async function AdminTypesPage({
   searchParams,
@@ -15,7 +15,7 @@ export default async function AdminTypesPage({
   searchParams: SearchParams;
 }) {
   await requireAdmin();
-  const { saved } = await searchParams;
+  const { saved, error } = await searchParams;
 
   const types = await db
     .select()
@@ -33,6 +33,12 @@ export default async function AdminTypesPage({
       {saved && (
         <div className="mt-4 rounded-2xl bg-coral-100 ring-1 ring-coral-300 px-4 py-3 text-sm text-coral-800">
           ✓ Saved.
+        </div>
+      )}
+
+      {error && (
+        <div className="mt-4 rounded-2xl bg-flash-500/10 ring-1 ring-flash-500/40 px-4 py-3 text-sm text-flash-600">
+          ⚠ {error}
         </div>
       )}
 
