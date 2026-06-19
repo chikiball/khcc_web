@@ -220,6 +220,8 @@ Ride detail page has a `📋 Copy for WhatsApp` button (`src/components/copy-rid
 
 Server actions on the new/edit ride form (`src/app/admin/rides/actions.ts`) distinguish user-input errors from real failures via a `FormError` class. The validation prelude (`parseRideInput`, `parsePaceGroups`, `maybeMergeGpx`) throws `FormError`; `createRide`/`updateRide` catch them and `redirect("?error=<msg>")` back to the form page, which renders an inline coral banner. Anything that isn't a `FormError` propagates as a real 500. Use the same pattern when adding new validation paths — naked `throw new Error(...)` produces an unhelpful "Application error" page in production because Next.js scrubs the original message.
 
+The ride-type admin actions (`src/app/admin/types/actions.ts`) follow the same `FormError` → `redirect("/admin/types?error=<msg>")` → inline banner pattern.
+
 ## Email (SMTP via Brevo)
 
 Transactional emails use Nodemailer → Brevo (formerly Sendinblue) so we can send from `noreply@burkam.nandharu.uk` with proper SPF/DKIM rather than relying on a Gmail relay. Set in `.env` as `SMTP_HOST=smtp-relay.brevo.com`, `SMTP_PORT=587`, `SMTP_USER` (Brevo account email), `SMTP_PASSWORD` (SMTP key from Brevo dashboard → SMTP & API), `SMTP_FROM`. The sending domain must be verified in Brevo first — they hand you SPF + DKIM TXT records to add at the DNS provider. Sent for:
@@ -267,7 +269,7 @@ Migration runs automatically in `docker/entrypoint.sh` before Next.js boots. No 
 - Avatar shape: `rounded-full` (circle). Hex stays on the pace badges and branded badges, not user photos.
 - Tap targets ≥ 44px (`button { min-height: 44px }` in globals — NFR-5, gloves).
 - Color presets for ride types: coral / maroon / flash / emerald / sky / amber. Defined in `src/lib/ride-types.ts` — add a new preset there (all Tailwind class strings must be literal for build to include them).
-- Default pace catalogue: `chill` (single-pace, default), `pacy` (occasional faster bunch). Inherited `A` / `B` / `C` rows from the upstream fork are deactivated by migration `0009_burkam_pace_seed.sql`.
+- Default pace catalogue: `chill` (single-pace, default), `pacy` (occasional faster bunch). Inherited `A` / `B` / `C` rows from the upstream fork are deactivated by migration `0009_burkam_pace_seed.sql`. Ride-type codes are stored **case-sensitively as typed** (Burkam's are lowercase words; legacy ones are uppercase letters) — don't normalise case in `parseInput`, or `updateRideType`'s immutable-code guard (`input.code !== code`) breaks for every lowercase row and crashes the save.
 - PWA icons (`public/icon-*.png`, `apple-icon.png`) regenerated from `burkam_logo.png` (committed at repo root) via sharp. Re-run the regen script if the logo changes.
 
 ## Don't
