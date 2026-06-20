@@ -124,6 +124,8 @@ Once a ride flips to `status=completed`, the detail page grows a recap section: 
 
 The "estimated end" is **distance-based** (`estimateRideHours` in `src/lib/series.ts`): `max(2h, distance_km / 14)`, with a `4h` fallback when distance is null. 14 km/h is Burkam's chill-pace + bubur-stop average; the floor stops aggressive flips on very short rides. Tune the constants there if rides regularly run longer.
 
+**Reopening a completed ride:** `/admin/rides/<id>/edit` shows a **Reopen ride** button for ride managers when status is `completed` (`reopenRide` action). It flips the ride back to `scheduled` so a wrong date/time can be amended and the ride returns to the active `/rides` list. The edit form is editable for completed rides (only `cancelled` rides are read-only). **Gotcha:** auto-complete is distance/time-based, so reopening a ride whose start time is still in the past will get auto-completed straight back (cron + lazy-on-read). The intended flow is therefore reopen → edit the date to a future time → save, which is why `reopenRide` redirects back to the edit page (not the detail page) to position the admin to fix the date immediately.
+
 **Recap UX:**
 - Leader recap: any leader on the ride (any pace) or admin/organiser. `RecapEditor` toggles between view + edit.
 - Photos: any approved member. Hard cap of 3 per uploader per ride enforced server-side in `uploadRidePhoto`. Delete is uploader-or-manager. Files served from `/uploads/ride-photos/<id>.jpg` (sharp-resized to max 1600 px, `fit: "inside"` to preserve aspect).
@@ -234,7 +236,7 @@ Helper: `sendEmail()` + `emailTemplate()` in `src/lib/email.ts`. Provider-agnost
 Admin-only pages under `/admin` (in the layout nav for `role=admin`):
 - `/admin/members` — approval queue (pending/approved/rejected tabs), remove access
 - `/admin/types` — add/edit/disable ride types with color presets
-- `/admin/rides` — ride list; `/admin/rides/new` + `/admin/rides/[id]/edit`. Edit page has the **Mark as completed** button for ride managers when status is `scheduled`.
+- `/admin/rides` — ride list; `/admin/rides/new` + `/admin/rides/[id]/edit`. Edit page has the **Mark as completed** button for ride managers when status is `scheduled`, and a **Reopen ride** button when status is `completed` (flips back to `scheduled` so a wrong date/time can be amended — see "Post-ride recap").
 - `/admin/routes` — route library (admin-only): name + description + GPX upload, list with edit + delete + per-route preview
 - `/admin/content` — edit landing-page sections. Currently exposes the "About" block only ("achievements" is hidden via `HIDDEN_BLOCK_KEYS` until we revive the trophy case)
 - `/admin/gallery` — upload/delete/edit-alt photos for the landing carousel

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { RideForm, type LeaderOption } from "@/components/ride-form";
 import type { RideTypeOption } from "@/lib/ride-types";
 import { CancelRideButton } from "@/components/cancel-ride-button";
-import { updateRide, stopSeries, markRideCompleted } from "../../actions";
+import { updateRide, stopSeries, markRideCompleted, reopenRide } from "../../actions";
 import type { PaceGroupInput } from "../../actions";
 import { PaceCancelButtons } from "@/components/pace-cancel-buttons";
 
@@ -129,9 +129,23 @@ export default async function EditRidePage({
           )}
 
           {ride.status === "completed" && (
-            <p className="text-sm text-ink-soft">
-              ✓ This ride is marked completed — recap and photos are unlocked.
-            </p>
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-maroon-700">
+                Completed ride
+              </h2>
+              <p className="text-sm text-ink-soft mt-1 mb-3">
+                ✓ This ride is marked completed — recap and photos are unlocked.
+                Reopen it to fix a wrong date/time and move it back to the active
+                rides list. After reopening, edit the date to a future time and
+                save — otherwise it will auto-complete again.
+              </p>
+              <form action={reopenRide.bind(null, id)}>
+                <button type="submit"
+                  className="inline-flex items-center justify-center rounded-2xl bg-maroon-700 hover:bg-maroon-800 text-cream-50 px-5 py-2.5 text-sm font-semibold active:scale-[0.98] transition-transform">
+                  Reopen ride
+                </button>
+              </form>
+            </div>
           )}
 
           {series && series.active && (

@@ -480,3 +480,24 @@ export async function markRideCompleted(rideId: string) {
   revalidatePath(`/rides/${rideId}`);
   redirect(`/rides/${rideId}`);
 }
+
+/**
+ * Reopen a `completed` ride back to `scheduled` so a leader can fix a wrong
+ * date/time and have it reappear on the active /rides list. Note: if the
+ * ride's start time is still in the past, the distance-based auto-complete
+ * (cron + lazy-on-read) will flip it straight back to completed — so the
+ * intended flow is reopen, then edit the date to a future time and save.
+ * We send the admin back to the edit page (not /rides/<id>) to do exactly that.
+ */
+export async function reopenRide(rideId: string) {
+  await requireRideManager();
+  await db
+    .update(schema.rides)
+    .set({ status: "scheduled", updatedAt: new Date() })
+    .where(and(eq(schema.rides.id, rideId), eq(schema.rides.status, "completed")));
+  revalidatePath("/rides");
+  revalidatePath("/rides/past");
+  revalidatePath(`/rides/${rideId}`);
+  revalidatePath(`/admin/rides/${rideId}/edit`);
+  redirect(`/admin/rides/${rideId}/edit`);
+}
