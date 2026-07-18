@@ -1,5 +1,5 @@
 import sharp from "sharp";
-import { writeFile, mkdir, copyFile, readFile } from "node:fs/promises";
+import { writeFile, mkdir, copyFile, readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 
 const PUBLIC_ROOT = path.join(process.cwd(), "public", "uploads");
@@ -236,6 +236,25 @@ async function writeUpload(subdir: string, filename: string, data: Buffer): Prom
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, filename), data);
   return `/uploads/${subdir}/${filename}`;
+}
+
+/**
+ * Delete a ride photo's on-disk files — both the full `<photoId>.jpg` and its
+ * `<photoId>-thumb.jpg` thumbnail. Best-effort: missing files (or a thumb that
+ * was never generated) are ignored, so this never throws and can't block the
+ * DB delete that follows it.
+ */
+export async function deleteRidePhotoFiles(photoId: string): Promise<void> {
+  const dir = path.join(PUBLIC_ROOT, "ride-photos");
+  await Promise.all(
+    [`${photoId}.jpg`, `${photoId}-thumb.jpg`].map(async (name) => {
+      try {
+        await unlink(path.join(dir, name));
+      } catch {
+        // Already gone / never existed — nothing to reclaim.
+      }
+    }),
+  );
 }
 
 async function processImage(

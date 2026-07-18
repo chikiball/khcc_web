@@ -2,7 +2,7 @@
 
 import { db, schema } from "@/db";
 import { canManageRides, requireApproved, requireUser } from "@/lib/auth-helpers";
-import { processRidePhoto } from "@/lib/upload";
+import { processRidePhoto, deleteRidePhotoFiles } from "@/lib/upload";
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 
@@ -129,6 +129,7 @@ export async function deleteRidePhoto(photoId: string) {
   }
 
   await db.delete(schema.ridePhotos).where(eq(schema.ridePhotos.id, photoId));
+  await deleteRidePhotoFiles(photoId);
   revalidatePath(`/rides/${photo.rideId}`);
   revalidatePath("/rides/past");
 }
