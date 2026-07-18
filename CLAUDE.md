@@ -26,6 +26,7 @@ npm run db:studio         # open Drizzle Studio GUI
 scripts/seed-types.ts                # seed default `chill` + `pacy` rows in ride_types
 scripts/seed.ts                      # seed 3 sample rides with pace groups
 scripts/backfill-route-previews.ts   # generate static map preview images for existing GPX files
+scripts/backfill-ride-photo-thumbs.ts # generate <id>-thumb.jpg thumbnails for existing recap photos
 scripts/send-test-email.ts <addr>    # test SMTP relay
 ```
 
@@ -82,7 +83,7 @@ canManageRides(role)   boolean — leader | organiser | admin
 
 `route_library` — admin-curated GPX tracks selectable from the ride form. Fields: id, name, description, distance_km, elevation_m, uploaded_by. The on-disk GPX lives at `/uploads/library/<id>.gpx`.
 
-`ride_photos` — recap photos attached to a completed ride. Cascade-deletes when the ride is removed. Uploaded by any approved member, capped at 3 per uploader per ride at the action layer. On-disk path: `/uploads/ride-photos/<id>.jpg`.
+`ride_photos` — recap photos attached to a completed ride. Cascade-deletes when the ride is removed. Uploaded by any approved member, capped at 3 per uploader per ride at the action layer. On-disk path: `/uploads/ride-photos/<id>.jpg`, plus a square `<id>-thumb.jpg` thumbnail generated at upload for the `/rides/past` collage (`RIDE_PHOTO_THUMB_SIZE` in `src/lib/upload.ts`).
 
 `content_blocks` — key-value admin CMS for the landing page. Currently surfaces "about" only; the "achievements" / trophy-case block is **parked** (hidden from both the public landing page and the admin content editor) and can be revived by removing `"achievements"` from `HIDDEN_BLOCK_KEYS` in `src/app/admin/content/page.tsx` and uncommenting the matching JSX block in `src/app/page.tsx`. The DB row is preserved either way.
 
@@ -129,7 +130,7 @@ The "estimated end" is **distance-based** (`estimateRideHours` in `src/lib/serie
 **Recap UX:**
 - Leader recap: any leader on the ride (any pace) or admin/organiser. `RecapEditor` toggles between view + edit.
 - Photos: any approved member. Hard cap of 3 per uploader per ride enforced server-side in `uploadRidePhoto`. Delete is uploader-or-manager. Files served from `/uploads/ride-photos/<id>.jpg` (sharp-resized to max 1600 px, `fit: "inside"` to preserve aspect).
-- `/rides/past` lists completed rides desc — title, date, distance/elev, attendee count, photo count, recap snippet (140 chars).
+- `/rides/past` lists completed rides desc — title, date, distance/elev, attendee count, photo count, recap snippet (140 chars). Each card's hero image is a **photo collage** (1–4 thumbnail tiles with a `+N` overlay when there are more) when the ride has recap photos, falling back to the static **map preview** otherwise. Collage tiles use `<id>-thumb.jpg`; if the thumb is missing on disk (photos predating thumbnails, until `backfill-ride-photo-thumbs.ts` runs) the card falls back to the full image.
 
 The Next-rides query at `/rides` excludes both `cancelled` AND `completed` — `notInArray(status, ["cancelled", "completed"])`. The detail page also hides the RSVP button on completed rides (defense-in-depth — RSVP-after-the-fact makes no sense). The `toggleRsvp` action itself isn't gated; the UI is the only enforcement.
 
@@ -181,7 +182,7 @@ Sub-directories:
 - `uploads/gallery/` — landing-page gallery photos, 1024×1024 JPEG (sharp)
 - `uploads/routes/` — per-ride GPX (`<rideId>.gpx`) + static map previews (`<rideId>-preview.jpg`), plus recurring-series seed GPX (`series-<seriesId>.gpx`)
 - `uploads/library/` — admin-curated library GPXs (`<libraryId>.gpx`) + previews (`<libraryId>-preview.jpg`)
-- `uploads/ride-photos/` — recap photos (`<photoId>.jpg`), max 1600 px `fit: inside`
+- `uploads/ride-photos/` — recap photos (`<photoId>.jpg`), max 1600 px `fit: inside`, plus a square `<photoId>-thumb.jpg` (`fit: cover`, `RIDE_PHOTO_THUMB_SIZE` px) for the `/rides/past` collage
 
 Static map previews: generated server-side on GPX upload by `src/lib/static-map.ts` — stitches Mapbox tiles + SVG polyline overlay using sharp. Falls back to OSM tiles when `NEXT_PUBLIC_MAPBOX_TOKEN` is unset. The function takes an optional `subdir` argument so the same generator writes both ride previews (`routes/`) and library previews (`library/`).
 

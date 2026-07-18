@@ -36,17 +36,47 @@ export async function processGalleryPhoto(file: File, photoId: string): Promise<
 }
 
 /**
- * Resize an uploaded ride-recap photo. Preserve aspect ratio (fit: inside)
- * — landscapes and portraits both render naturally in the recap grid.
- * Max dimension 1600 keeps file sizes small without losing detail.
+ * Square thumbnail dimension for ride-recap photos. Drives the collage tiles
+ * on /rides/past — small enough to keep that list light even when a ride has
+ * a dozen photos, big enough to stay crisp on retina in a full-width tile.
+ */
+export const RIDE_PHOTO_THUMB_SIZE = 800;
+
+/**
+ * Derive the thumbnail URL/path for a ride photo from its full-size image URL
+ * (`/uploads/ride-photos/<id>.jpg` → `…/<id>-thumb.jpg`). Kept as a pure string
+ * transform so no thumb column is needed on `ride_photos`.
+ */
+export function ridePhotoThumbUrl(imageUrl: string): string {
+  return imageUrl.replace(/\.jpg$/, "-thumb.jpg");
+}
+
+/**
+ * Resize an uploaded ride-recap photo. Writes two files from one read of the
+ * source:
+ *   - `<photoId>.jpg` — full image, aspect preserved (fit: inside), max 1600px,
+ *     used by the ride detail recap grid. Landscapes and portraits both render
+ *     naturally.
+ *   - `<photoId>-thumb.jpg` — square (fit: cover) RIDE_PHOTO_THUMB_SIZE thumb
+ *     for the /rides/past collage.
+ * The thumb is best-effort: a failure there must not sink the upload, since the
+ * list falls back to the full image when the thumb is missing on disk.
  */
 export async function processRidePhoto(file: File, photoId: string): Promise<string> {
-  return processImage(file, {
-    subdir: "ride-photos",
-    filename: `${photoId}.jpg`,
-    size: 1600,
-    fit: "inside",
-  });
+  assertImage(file);
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const full = await resizeToJpeg(buffer, 1600, "inside");
+  const url = await writeUpload("ride-photos", `${photoId}.jpg`, full);
+
+  try {
+    const thumb = await resizeToJpeg(buffer, RIDE_PHOTO_THUMB_SIZE, "cover");
+    await writeUpload("ride-photos", `${photoId}-thumb.jpg`, thumb);
+  } catch {
+    // Full image already saved — the list gracefully falls back to it.
+  }
+
+  return url;
 }
 
 /**
@@ -176,6 +206,38 @@ export async function copySeriesSeedGpxToRide(
   }
 }
 
+function assertImage(file: File): void {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Pick an image (JPEG, PNG, or WebP).");
+  }
+  if (file.size > MAX_BYTES) {
+    throw new Error("Image is too big (10 MB max).");
+  }
+}
+
+async function resizeToJpeg(
+  buffer: Buffer,
+  size: number,
+  fit: "cover" | "inside",
+): Promise<Buffer> {
+  try {
+    return await sharp(buffer)
+      .rotate()
+      .resize(size, size, { fit, position: "center" })
+      .jpeg({ quality: 85, progressive: true, mozjpeg: true })
+      .toBuffer();
+  } catch {
+    throw new Error("Could not read that image. Try JPEG, PNG, or WebP.");
+  }
+}
+
+async function writeUpload(subdir: string, filename: string, data: Buffer): Promise<string> {
+  const dir = path.join(PUBLIC_ROOT, subdir);
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, filename), data);
+  return `/uploads/${subdir}/${filename}`;
+}
+
 async function processImage(
   file: File,
   opts: {
@@ -185,29 +247,8 @@ async function processImage(
     fit: "cover" | "inside";
   },
 ): Promise<string> {
-  if (!file.type.startsWith("image/")) {
-    throw new Error("Pick an image (JPEG, PNG, or WebP).");
-  }
-  if (file.size > MAX_BYTES) {
-    throw new Error("Image is too big (10 MB max).");
-  }
-
+  assertImage(file);
   const buffer = Buffer.from(await file.arrayBuffer());
-
-  let resized: Buffer;
-  try {
-    resized = await sharp(buffer)
-      .rotate()
-      .resize(opts.size, opts.size, { fit: opts.fit, position: "center" })
-      .jpeg({ quality: 85, progressive: true, mozjpeg: true })
-      .toBuffer();
-  } catch {
-    throw new Error("Could not read that image. Try JPEG, PNG, or WebP.");
-  }
-
-  const dir = path.join(PUBLIC_ROOT, opts.subdir);
-  await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, opts.filename), resized);
-
-  return `/uploads/${opts.subdir}/${opts.filename}`;
+  const resized = await resizeToJpeg(buffer, opts.size, opts.fit);
+  return writeUpload(opts.subdir, opts.filename, resized);
 }
