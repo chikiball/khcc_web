@@ -8,6 +8,7 @@ import { parseGpxCoords } from "@/lib/gpx";
 import { getRideForecast, weatherIcon, WIND_THRESHOLD_KPH } from "@/lib/weather";
 import { RideDetailMap } from "@/components/ride-detail-map";
 import { RsvpButton } from "@/components/rsvp-button";
+import { AddRiderControl } from "@/components/add-rider-control";
 import { CopyRideButton } from "@/components/copy-ride-button";
 import { PaceBadge } from "@/components/ride-card";
 import { RecapEditor } from "@/components/recap-editor";
@@ -107,6 +108,17 @@ export default async function RideDetailPage({ params }: { params: Params }) {
   const isCancelled = ride.status === "cancelled";
   const isCompleted = ride.status === "completed";
   const totalRiders = rsvps.length;
+
+  // Managers can add riders on behalf of members who didn't RSVP themselves —
+  // fetch the approved roster only when that control will actually render.
+  const rideOpen = !isCancelled && !isCompleted;
+  const approvedMembers = isManager && rideOpen
+    ? await db
+        .select({ id: schema.users.id, name: schema.users.name })
+        .from(schema.users)
+        .where(eq(schema.users.status, "approved"))
+        .orderBy(asc(schema.users.name))
+    : [];
 
   // Recap data — only relevant for completed rides
   const ridePhotos = isCompleted
@@ -331,6 +343,10 @@ export default async function RideDetailPage({ params }: { params: Params }) {
             const isCancelledPace = pg.status === "cancelled";
             const effectiveDist = pg.distanceKm ?? ride.distanceKm;
             const effectiveElev = pg.elevationM ?? ride.elevationM;
+            const canAddRiders = isManager && rideOpen && !isCancelledPace;
+            const eligibleMembers = canAddRiders
+              ? approvedMembers.filter((m) => !pgRsvps.some((r) => r.userId === m.id))
+              : [];
 
             return (
               <div key={pg.id}
@@ -400,6 +416,16 @@ export default async function RideDetailPage({ params }: { params: Params }) {
                         </li>
                       ))}
                     </ul>
+                  </div>
+                )}
+                {/* Manager: add a rider who didn't RSVP themselves */}
+                {canAddRiders && (
+                  <div className="px-4 py-3 bg-white border-t border-maroon-100">
+                    <AddRiderControl
+                      rideId={ride.id}
+                      paceGroupId={pg.id}
+                      members={eligibleMembers}
+                    />
                   </div>
                 )}
               </div>

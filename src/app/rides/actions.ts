@@ -46,6 +46,66 @@ export async function toggleRsvp(
   revalidatePath(`/rides/${rideId}`);
 }
 
+/**
+ * Manually add a rider to a pace group on behalf of someone who didn't RSVP
+ * themselves. Manager-only (leader / organiser / admin) — role re-read from
+ * DB, never trusted from the JWT. The added rider can still remove themselves
+ * later via the normal RSVP toggle (same (ride_id, user_id) row).
+ *
+ * Upserts on (ride_id, user_id): if the target is already in another pace on
+ * this ride, this moves them to the chosen pace (mirrors the self-switch).
+ */
+export async function addRiderToPace(rideId: string, paceGroupId: string, userId: string) {
+  const actor = await requireApproved();
+
+  const [actorRow] = await db
+    .select({ role: schema.users.role })
+    .from(schema.users)
+    .where(eq(schema.users.id, actor.id))
+    .limit(1);
+  if (!actorRow || !canManageRides(actorRow.role)) {
+    throw new Error("Only ride managers can add riders.");
+  }
+
+  const [ride] = await db
+    .select({ status: schema.rides.status })
+    .from(schema.rides)
+    .where(eq(schema.rides.id, rideId))
+    .limit(1);
+  if (!ride) throw new Error("Ride not found.");
+  if (ride.status === "cancelled" || ride.status === "completed") {
+    throw new Error("This ride is closed to new riders.");
+  }
+
+  const [pace] = await db
+    .select({ id: schema.ridePaceGroups.id, status: schema.ridePaceGroups.status })
+    .from(schema.ridePaceGroups)
+    .where(and(eq(schema.ridePaceGroups.id, paceGroupId), eq(schema.ridePaceGroups.rideId, rideId)))
+    .limit(1);
+  if (!pace) throw new Error("Pace group not found.");
+  if (pace.status === "cancelled") throw new Error("That pace group is cancelled.");
+
+  const [target] = await db
+    .select({ id: schema.users.id, status: schema.users.status })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+  if (!target || target.status !== "approved") {
+    throw new Error("Rider must be an approved member.");
+  }
+
+  await db
+    .insert(schema.rideRsvps)
+    .values({ rideId, userId, paceGroupId, status: "in" })
+    .onConflictDoUpdate({
+      target: [schema.rideRsvps.rideId, schema.rideRsvps.userId],
+      set: { paceGroupId, status: "in", updatedAt: new Date() },
+    });
+
+  revalidatePath("/rides");
+  revalidatePath(`/rides/${rideId}`);
+}
+
 const PHOTOS_PER_UPLOADER_PER_RIDE = 3;
 
 /**

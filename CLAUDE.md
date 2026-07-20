@@ -93,6 +93,7 @@ canManageRides(role)   boolean — leader | organiser | admin
 
 A ride can offer A + B + C (or any subset of `ride_types`). Key points:
 - One rider per ride, one pace (PK enforces it). Switching pace = upsert.
+- **Managers can add a rider manually.** Each open pace group's card shows a manager-only (`canManageRides`) "+ Add rider" control (`AddRiderControl` → `addRiderToPace` in `src/app/rides/actions.ts`) that RSVPs an approved member who didn't sign up themselves. It re-reads the actor's role from DB (never trusts the JWT), validates the ride is open + pace not cancelled + target approved, and upserts on `(ride_id, user_id)` — so adding someone already in another pace *moves* them. The added rider can always remove themselves via the normal RSVP toggle (same row). The member picker excludes riders already in that pace; the control is hidden on cancelled/completed rides.
 - Per-pace cancellation: admin can cancel just B while A and C run. If all paces cancel, ride auto-cancels.
 - All leaders on the ride (any pace) can see emergency contacts for all RSVP'd riders — cross-pace visibility for safety.
 - `ride_pace_groups.distanceKm/elevationM` override the ride-level defaults when set; fall back to `rides.distanceKm/elevationM` otherwise.
