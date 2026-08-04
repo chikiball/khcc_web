@@ -13,6 +13,13 @@ export const dynamic = "force-dynamic";
 // "+N" overlay on the last tile.
 const COLLAGE_MAX = 4;
 
+// Cards per page. Each card is a Link (prefetch disabled below) plus up to
+// COLLAGE_MAX images served through the /uploads route handler, so the row
+// count directly multiplies into concurrent requests — 60 rides was ~240
+// image fetches in one view, enough to trip the nginx limit_req zone and
+// hand a Server Action an HTML 503 instead of a flight response.
+const PAGE_SIZE = 24;
+
 async function fileExists(publicPath: string): Promise<boolean> {
   const fp = path.join(process.cwd(), "public", publicPath);
   try {
@@ -80,7 +87,7 @@ export default async function PastRidesPage() {
     .from(schema.rides)
     .where(eq(schema.rides.status, "completed"))
     .orderBy(desc(schema.rides.startsAt))
-    .limit(60);
+    .limit(PAGE_SIZE);
 
   const rideIds = rides.map((r) => r.id);
 
@@ -172,6 +179,7 @@ export default async function PastRidesPage() {
             <Link
               key={ride.id}
               href={`/rides/${ride.id}`}
+              prefetch={false}
               className="block rounded-2xl bg-white ring-1 ring-maroon-200/60 overflow-hidden hover:ring-coral-300 transition"
             >
               {hero && "photos" in hero && (
@@ -180,7 +188,7 @@ export default async function PastRidesPage() {
               {hero && "preview" in hero && (
                 <div className="relative aspect-[2/1] bg-cream-100">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={hero.preview} alt="" className="absolute inset-0 size-full object-cover" />
+                  <img src={hero.preview} alt="" loading="lazy" className="absolute inset-0 size-full object-cover" />
                 </div>
               )}
               <div className="p-4 space-y-1.5">
