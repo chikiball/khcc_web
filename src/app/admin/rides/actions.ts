@@ -3,7 +3,7 @@
 import { db, schema } from "@/db";
 import { requireRideManager } from "@/lib/auth-helpers";
 import { parseGpx, parseGpxCoords } from "@/lib/gpx";
-import { saveRouteGpx, copyLibraryGpxToRide, saveSeriesSeedGpx } from "@/lib/upload";
+import { saveRouteGpx, copyLibraryGpxToRide, copyRideGpxToRide, saveSeriesSeedGpx } from "@/lib/upload";
 import { generateRoutePreview } from "@/lib/static-map";
 import { materializeSeries } from "@/lib/series";
 import { revalidatePath } from "next/cache";
@@ -449,6 +449,88 @@ export async function cancelPaceGroup(paceGroupId: string, formData: FormData) {
   revalidatePath("/rides");
   revalidatePath("/admin/rides");
   redirect("/admin/rides");
+}
+
+/**
+ * Clone a ride into a brand-new row on a new date. Copies the plan — title,
+ * meeting point, distance/elevation, route URL, description, GPX and pace
+ * groups — and nothing from the recap side: no RSVPs, no photos, no recap
+ * note. That separation is the whole point. Re-dating an existing ride (the
+ * reopen → edit-date flow) keeps `ride_rsvps`, `ride_photos` and `recap_*`
+ * attached to the row, so last week's riders and photos silently become this
+ * week's; duplicating gives each running of a ride its own record.
+ *
+ * The clone is always standalone (`seriesId: null`) even when the source is a
+ * series occurrence — a second live future occurrence would violate the
+ * one-occurrence invariant and `materializeSeries` would sweep it away.
+ * Cancelled paces are cloned as active, since a fresh ride starts clean.
+ */
+export async function duplicateRide(rideId: string, formData: FormData) {
+  const user = await requireRideManager();
+
+  const [source] = await db
+    .select()
+    .from(schema.rides)
+    .where(eq(schema.rides.id, rideId))
+    .limit(1);
+  if (!source) throw new Error("Ride not found.");
+
+  const raw = String(formData.get("starts_at") ?? "").trim();
+  const startsAt = new Date(raw);
+  if (!raw || Number.isNaN(startsAt.getTime())) {
+    redirect(
+      `/admin/rides/${rideId}/edit?error=${encodeURIComponent(
+        "Pick a date and time for the duplicate.",
+      )}`,
+    );
+  }
+
+  const [created] = await db
+    .insert(schema.rides)
+    .values({
+      title: source.title,
+      startsAt,
+      startPointName: source.startPointName,
+      startPointLat: source.startPointLat,
+      startPointLng: source.startPointLng,
+      distanceKm: source.distanceKm,
+      elevationM: source.elevationM,
+      routeUrl: source.routeUrl,
+      description: source.description,
+      seriesId: null,
+    })
+    .returning({ id: schema.rides.id });
+
+  const sourcePaces = await db
+    .select()
+    .from(schema.ridePaceGroups)
+    .where(eq(schema.ridePaceGroups.rideId, rideId))
+    .orderBy(asc(schema.ridePaceGroups.position));
+
+  if (sourcePaces.length > 0) {
+    await syncPaceGroups(
+      created.id,
+      sourcePaces.map((pg, i) => ({
+        pace_code: pg.paceCode,
+        leader_id: pg.leaderId ?? undefined,
+        distance_km: pg.distanceKm != null ? String(pg.distanceKm) : undefined,
+        elevation_m: pg.elevationM != null ? String(pg.elevationM) : undefined,
+        cap: pg.cap != null ? String(pg.cap) : undefined,
+        notes: pg.notes ?? undefined,
+        position: pg.position ?? i,
+      })),
+      user.id,
+    );
+  }
+
+  // Route: copy the GPX into the clone's slot and rebuild its preview.
+  // Best-effort — a ride without a GPX (or a preview failure) must not block.
+  const gpxText = await copyRideGpxToRide(rideId, created.id);
+  if (gpxText) await tryGeneratePreview(gpxText, created.id);
+
+  revalidatePath("/rides");
+  revalidatePath("/admin/rides");
+  redirect(`/admin/rides/${created.id}/edit`);
 }
 
 export async function loadPaceGroups(rideId: string) {

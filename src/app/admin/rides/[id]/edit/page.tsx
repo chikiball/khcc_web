@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { RideForm, type LeaderOption } from "@/components/ride-form";
 import type { RideTypeOption } from "@/lib/ride-types";
 import { CancelRideButton } from "@/components/cancel-ride-button";
-import { updateRide, stopSeries, markRideCompleted, reopenRide } from "../../actions";
+import { updateRide, stopSeries, markRideCompleted, reopenRide, duplicateRide } from "../../actions";
 import type { PaceGroupInput } from "../../actions";
 import { PaceCancelButtons } from "@/components/pace-cancel-buttons";
 
@@ -53,6 +53,11 @@ export default async function EditRidePage({
 
   const isCancelled = ride.status === "cancelled";
   const action = updateRide.bind(null, id);
+
+  // Default the duplicate to one week on from this ride — the common case is
+  // running the same ride again next week.
+  const nextWeek = new Date(ride.startsAt);
+  nextWeek.setDate(nextWeek.getDate() + 7);
 
   const defaultPaceGroups: PaceGroupInput[] = paceGroups.map((pg) => ({
     id: pg.id,
@@ -196,6 +201,31 @@ export default async function EditRidePage({
           </div>
         </div>
       )}
+      <div className="mt-10 pt-6 border-t border-maroon-200/40">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-maroon-700">
+          Duplicate ride
+        </h2>
+        <p className="text-sm text-ink-soft mt-1 mb-3">
+          Copies the plan — title, meeting point, route and pace groups — into a
+          brand-new ride on the date you pick. Riders, photos and the recap are
+          <strong> not</strong> copied. Use this to run the same ride again
+          instead of reopening this one and moving its date, which keeps last
+          time&apos;s riders and photos attached.
+        </p>
+        <form action={duplicateRide.bind(null, id)} className="flex flex-wrap items-center gap-2">
+          <input
+            type="datetime-local"
+            name="starts_at"
+            defaultValue={toLocalDateTimeInput(nextWeek)}
+            required
+            className="rounded-2xl bg-white ring-1 ring-maroon-200 px-4 py-2.5 text-sm text-ink"
+          />
+          <button type="submit"
+            className="inline-flex items-center justify-center rounded-2xl bg-white ring-1 ring-coral-300 text-coral-700 hover:bg-cream-100 px-5 py-2.5 text-sm font-semibold active:scale-[0.98] transition-transform">
+            Duplicate ride
+          </button>
+        </form>
+      </div>
     </main>
   );
 }

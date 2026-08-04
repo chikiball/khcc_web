@@ -206,6 +206,28 @@ export async function copySeriesSeedGpxToRide(
   }
 }
 
+/**
+ * Copy one ride's GPX into another ride's slot — used when duplicating a ride
+ * so the clone gets the same polyline, download link and static preview.
+ * Returns the raw GPX text on success (caller regenerates the preview from it),
+ * or null when the source ride has no GPX on disk (best-effort, never throws).
+ */
+export async function copyRideGpxToRide(
+  srcRideId: string,
+  destRideId: string,
+): Promise<string | null> {
+  const dir = path.join(PUBLIC_ROOT, "routes");
+  const src = path.join(dir, `${srcRideId}.gpx`);
+  try {
+    const text = await readFile(src, "utf8");
+    await mkdir(dir, { recursive: true });
+    await copyFile(src, path.join(dir, `${destRideId}.gpx`));
+    return text;
+  } catch {
+    return null;
+  }
+}
+
 function assertImage(file: File): void {
   if (!file.type.startsWith("image/")) {
     throw new Error("Pick an image (JPEG, PNG, or WebP).");
