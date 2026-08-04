@@ -54,3 +54,6 @@ next-env.d.ts
 
 # User uploads — host-side bind-mount, runtime data only
 /uploads
+
+# Scratch files for reproducing bugs locally (sample photos, GPX, dumps)
+/resources
