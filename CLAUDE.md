@@ -270,6 +270,10 @@ Server actions on the new/edit ride form (`src/app/admin/rides/actions.ts`) dist
 
 The ride-type admin actions (`src/app/admin/types/actions.ts`) follow the same `FormError` → `redirect("/admin/types?error=<msg>")` → inline banner pattern.
 
+**Actions called from client components return errors, they don't throw.** The `FormError` → redirect pattern works for server-rendered form pages. For an action wired into a client component via `<form action={…}>` or `startTransition`, a throw has no boundary to catch it and Next.js replaces the whole page with "Application error: a client-side exception has occurred" — no message, no way back, and any file the member picked is gone. The recap actions in `src/app/rides/actions.ts` therefore return `PhotoActionState` (`{ ok: true } | { error: string } | null`) for every user-fixable path, and `RidePhotoUploader` renders the message inline via `useActionState`, clearing the picker only on success. `toggleRsvp`, `saveRecap` and `addRiderToPace` still throw — convert them the same way if you touch them.
+
+`src/app/rides/error.tsx` is the backstop for whatever still throws under `/rides`. It also **renders `error.message`**, which matters for diagnosis: Next.js scrubs the message for server-originated errors but keeps it for client-origin ones, and that's what surfaced the Cloudflare WAF block described below. Keep it that way — the alternative is asking members to open a JS console.
+
 ## Email (SMTP via Brevo)
 
 Transactional emails use Nodemailer → Brevo (formerly Sendinblue) so we can send from `noreply@burkam.nandharu.uk` with proper SPF/DKIM rather than relying on a Gmail relay. Set in `.env` as `SMTP_HOST=smtp-relay.brevo.com`, `SMTP_PORT=587`, `SMTP_USER` (Brevo account email), `SMTP_PASSWORD` (SMTP key from Brevo dashboard → SMTP & API), `SMTP_FROM`. The sending domain must be verified in Brevo first — they hand you SPF + DKIM TXT records to add at the DNS provider. Sent for:
@@ -314,6 +318,42 @@ Key env (on the server at `.env`):
 
 Migration runs automatically in `docker/entrypoint.sh` before Next.js boots. No manual step on deploy.
 
+## The proxy chain, and where requests die
+
+Requests traverse **Safari → Cloudflare (WAF) → cloudflare-tunnel → nginx-gateway → burkam-web**. Four layers can answer a request, and only the last two log anything you can `docker logs`. When something fails with no server-side trace, work the chain from the outside in rather than assuming it's app code.
+
+**The symptom to recognise:** the App Router throwing `An unexpected response was received from the server.` That is *not* an app error — it's Next.js rejecting a Server Action / RSC response whose `content-type` wasn't `text/x-component`. Something upstream substituted HTML. Triage:
+
+| Evidence | Culprit |
+|---|---|
+| No POST in the nginx access log at all | Cloudflare answered it — WAF block, challenge, or edge 5xx |
+| POST present, non-2xx | nginx (`limit_req` → HTML 503, `client_max_body_size` → 413) |
+| POST present with 200, still failed | response mangled in transit, or a stale Server Action ID from an older build |
+| No request anywhere, service worker involved | the SW answered from cache (see below) |
+
+**Cloudflare's WAF blocks binary uploads, intermittently.** Managed rules inspect multipart request bodies and flag some JPEGs as "malformed data". The reply is Cloudflare's `Sorry, you have been blocked` HTML page with a Ray ID, served at the edge — so `burkam-web` logs nothing, nginx logs nothing, and it looks exactly like an app bug. It's per-image, so most uploads succeed and one photo fails forever, which reads as "intermittent". Because Server Actions POST to the page's own URL there's no upload endpoint to scope an exception to; the fix is a WAF rule for the host (Security → Events, find the Ray ID → disable that managed rule for `burkam.nandharu.uk`, or a custom Skip rule on `http.host eq "burkam.nandharu.uk" and http.request.method eq "POST"`). Everything on the host is behind `requireApproved()`, so this isn't the security loss it looks like. Related: the client-side canvas re-encode in `ride-photo-uploader.tsx` only runs for files ≥ 1 MB *and* over 2000 px — anything smaller reaches the WAF as its original bytes, which is exactly when it trips.
+
+**`limit_req` keys on the wrong address.** `nginx/burkam.conf` uses `$binary_remote_addr`, but behind the tunnel every request arrives from the tunnel container, so the whole membership shares one 20 r/s bucket instead of getting one each. The real IP is already passed as `X-Real-IP`; key the zone on `$http_cf_connecting_ip` if this ever starts biting. This is also why wide lists disable RSC prefetch (see the `Don't` list).
+
+## PWA / service worker
+
+`@ducanh2912/next-pwa`, config in `next.config.ts`. Disabled in development, so service-worker behaviour can only be exercised via `npm run build && npm run start`.
+
+**The service worker must never answer a request the App Router made.** next-pwa's default `runtimeCaching` caches HTML documents (`pages`) and RSC payloads (`pages-rsc`, `pages-rsc-prefetch`) as `NetworkFirst`. Every page here is `force-dynamic` and auth-gated, so a cached copy is stale or belongs to another session, and it breaks two ways: a cached document from an older build keeps that build's **Server Action IDs** alive across deploys (`NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` does not protect against this — IDs derive from the code, so editing an action file changes them), and a cache-served body can reach the router as `text/html`.
+
+All three are overridden to `NetworkOnly`. The mechanism matters if you touch it: reusing the default `cacheName` makes next-pwa's `resolveRuntimeCaching` **drop** the default entry, and custom entries are registered **first** — so the document matcher is deliberately scoped to `request.destination === "document"`, otherwise it would shadow the static-asset rules and kill offline caching entirely. Static assets (JS, CSS, fonts, images, `/uploads/*.jpg`) keep their caches; **pages no longer render offline**, which is the accepted trade.
+
+Verify a deploy with `docker exec burkam-web sh -c 'grep -o NetworkOnly public/sw.js | wc -l'` — expect 3. Use `grep -o … | wc -l`, not `grep -c`: `sw.js` is minified onto one line, so `grep -c` caps at 1 and tells you nothing.
+
+## Link previews (og:image)
+
+Pasting a ride link into WhatsApp shows a small square thumbnail, controlled by the `openGraph` / `twitter` metadata in `src/app/layout.tsx`. Two non-obvious constraints:
+
+- **Size is the lever.** With no explicit `og:image`, scrapers fall back to the largest icon they can find (`icon-512.png`) and anything ≥ 300 px renders as a full-width card — that's the "giant logo" bug. The image is pinned to `icon-192.png` with explicit `width`/`height` to stay under the threshold. `metadataBase` is required too, or relative `og:image` paths stay relative and scrapers reject them.
+- **The tags are read from `/login`, not the ride.** `/rides/*` is behind middleware, so an unauthenticated scraper is redirected — per-ride `openGraph` tags would never be seen, and every shared ride previews with the same generic title. Making previews ride-specific needs a public scrape-only route (e.g. `/r/<id>` with tags and no ride data); the `📋 Copy for WhatsApp` text already carries the real details.
+
+WhatsApp caches previews per URL, so test with a throwaway query param (`?v=2`) rather than re-pasting the same link.
+
 ## Brand & UI
 
 - Palette: `src/app/globals.css` `@theme` — sky-blue brand on a near-white paper with pale-green wash; sunrise-orange accent. Tailwind token names are inherited from the upstream KHCC fork (`coral-*`, `maroon-*`, `flash-*`, `cream-*`) but their *values* were redefined for Burkam — read `coral-*` as "brand", `maroon-*` as "ink", `cream-*` as "paper", `flash-*` as "hot accent". Don't rename the tokens; renaming would touch dozens of components for zero behaviour change.
@@ -350,6 +390,10 @@ Migration runs automatically in `docker/entrypoint.sh` before Next.js boots. No 
 - Don't import `@/db`, `pg`, `sharp`, `nodemailer`, or `@/auth` into `src/auth.config.ts` — it's the edge-runtime config that `middleware.ts` builds on, and Node-only modules break the middleware bundle. Role/status checks belong in Server Components/Actions, not middleware.
 - Don't raise the upload size in one place only — `serverActions.bodySizeLimit` (`next.config.ts`) and `client_max_body_size` (`nginx/burkam.conf`) are both 10mb and must move together.
 - Don't add a test-runner assertion to a "done" claim — there is no test suite. `npm run lint` + `npm run typecheck` are the verification bar.
+- Don't throw from a Server Action that a client component calls — return `{ error }` instead. A throw there has no boundary and blanks the page with "Application error: a client-side exception has occurred", losing the member's input. See "Actions called from client components" above.
+- Don't debug `An unexpected response was received from the server.` as an app bug. It means a non-`text/x-component` response reached the App Router, i.e. something in front of Next.js answered — Cloudflare's WAF, nginx, or the service worker. Check for the POST in the nginx access log **first**: if it isn't there, the request never reached your app and no amount of reading `docker logs burkam-web` will help.
+- Don't let the service worker cache documents or RSC payloads. It serves stale builds (dead Server Action IDs) and hands the router HTML where it needs a flight payload. The three `NetworkOnly` overrides in `next.config.ts` exist for that reason.
+- Don't ship without an explicit `og:image`. Scrapers fall back to `icon-512.png` and render a full-width logo card.
 
 ## Known leftovers from the KHCC fork
 
