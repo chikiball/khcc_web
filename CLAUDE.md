@@ -22,13 +22,40 @@ npm run db:migrate        # drizzle-kit: apply pending migrations
 npm run db:push           # push schema directly (dev shortcut, no migration file)
 npm run db:studio         # open Drizzle Studio GUI
 
-# One-off scripts (inside the container — docker exec burkam-web node node_modules/tsx/dist/cli.mjs scripts/<name>.ts)
+# One-off scripts — locally: npx tsx scripts/<name>.ts
+# In prod: docker exec burkam-web node node_modules/tsx/dist/cli.mjs scripts/<name>.ts
 scripts/seed-types.ts                # seed default `chill` + `pacy` rows in ride_types
 scripts/seed.ts                      # seed 3 sample rides with pace groups
 scripts/backfill-route-previews.ts   # generate static map preview images for existing GPX files
 scripts/backfill-ride-photo-thumbs.ts # generate <id>-thumb.jpg thumbnails for existing recap photos
 scripts/send-test-email.ts <addr>    # test SMTP relay
 ```
+
+**There is no test suite** — no test runner, no test files, no `npm test`. The only automated checks are `npm run lint` and `npm run typecheck`; run both before considering a change done. Don't invent a test command or scaffold a framework unless asked.
+
+**Local dev bootstrap** (full walkthrough in README):
+```bash
+cp .env.example .env.local     # dev reads .env.local; prod reads .env
+docker run -d --name burkam-db-local -p 5432:5432 \
+  -e POSTGRES_USER=burkam -e POSTGRES_PASSWORD=burkam -e POSTGRES_DB=burkam postgres:16-alpine
+npm run db:push && npx tsx scripts/seed-types.ts && npx tsx scripts/seed.ts
+npm run dev
+```
+`DATABASE_URL` is a **local-dev-only** convenience: both `src/db/index.ts` and `drizzle.config.ts` prefer it when set and otherwise fall back to discrete `PG*` vars, which is what prod uses (see the password-encoding note under Deployment). `drizzle.config.ts` also has to force `ssl: false` on the discrete-field path — drizzle-kit defaults it to true and self-hosted Postgres serves no TLS.
+
+**Dev-vs-prod behaviour differences to be aware of:**
+- The **PWA is disabled in development** (`disable: NODE_ENV === "development"` in `next.config.ts`). Service worker / offline / install-prompt changes can only be verified via `npm run build && npm run start`.
+- `src/db/index.ts` caches the `pg` Pool on `globalThis` outside production so HMR doesn't leak connections. Prod gets a fresh pool per process (max 10).
+- Timezone: the production container runs **UTC** while you're likely on local time, so anything touching `datetime-local` parsing behaves differently in dev (see "Sharing rides").
+
+## Upload size ceiling
+
+Three limits must stay in agreement when touching uploads:
+- `next.config.ts` → `experimental.serverActions.bodySizeLimit: "10mb"` (uploads all go through Server Actions, not API routes)
+- `nginx/burkam.conf` → `client_max_body_size 10m`
+- whatever the action itself validates
+
+Raising one alone produces a confusing failure: nginx 413s before Next sees the request, or Next rejects the action body while nginx happily forwarded it. `nginx/burkam.conf` also carries the `limit_req` zone (20r/s, burst 40) referenced in the "Don't" list below.
 
 ## Architecture
 
@@ -60,6 +87,19 @@ requireRideManager()   requireApproved + leader|organiser|admin (404s members)
 requireAdmin()         requireApproved + admin (redirects non-admins)
 canManageRides(role)   boolean — leader | organiser | admin
 ```
+
+**Two-file Auth.js split (edge vs Node) — important structural constraint:**
+
+| File | Runtime | Contains |
+|---|---|---|
+| `src/auth.config.ts` | **edge** (middleware) | `pages`, the `authorized` callback. `providers: []` — deliberately empty. |
+| `src/auth.ts` | Node (server components / actions / route handlers) | spreads `authConfig`, adds `DrizzleAdapter`, Google + Credentials providers, and the `signIn` / `jwt` / `session` callbacks. Exports `handlers`, `auth`, `signIn`, `signOut`. |
+
+`src/middleware.ts` instantiates NextAuth from **`auth.config.ts` only**. Never import `@/db`, `pg`, `nodemailer`, `sharp`, or `@/auth` into `auth.config.ts` (or into anything it imports) — the edge bundle can't hold Node built-ins and middleware will fail to compile or blow up at request time.
+
+Consequently `middleware.ts` performs only a coarse signed-in-or-not check on `/rides`, `/onboarding`, `/admin`, `/pending`. **All role/status/onboarded/terms gating happens in Server Components and Server Actions** via the helpers above — middleware cannot read those fields without DB access. Its `matcher` excludes `api/auth`, `_next/*`, and static image extensions; the PWA's `sw.js` / `workbox-*` are excluded too, so adding a new public asset path may mean touching that regex.
+
+Google uses `allowDangerousEmailAccountLinking: true` on purpose: email is the shared identity column and admin approval is the real gate, so someone who signed up via email-credentials can later sign in with Google and land on the same `users` row. Removing it would fork such a user into two accounts.
 
 **Authorization:** application-level (no RLS). Every Server Action / Server Component gates via the helpers above and scopes DB queries by `user.id`. Never trust the JWT for security-critical mutations — re-read from DB at action time.
 
@@ -103,7 +143,7 @@ A ride can offer A + B + C (or any subset of `ride_types`). Key points:
 Series live in `ride_series` (`weekly` | `biweekly`). Implementation in `src/lib/series.ts`. Invariant: **at most one live future occurrence per active series at any time.**
 
 `materializeSeries(series)`:
-1. Sweeps stale future occurrences for the series — deletes any beyond the soonest non-cancelled one **that has no RSVPs** (the FK cascade drops pace groups + rsvps automatically).
+1. Sweeps stale future occurrences for the series — deletes any beyond the soonest **still-upcoming** one (`scheduled` / `weather-watch`) **that has no RSVPs** (the FK cascade drops pace groups + rsvps automatically). `completed` and `cancelled` both count as not-live, so they free the slot for the next occurrence; a `completed` occurrence is additionally **never** a delete candidate, because it owns the recap note and photos. Getting this filter wrong is a live footgun: a ride marked completed by hand is often still *future-dated* (the manual button exists to skip the auto-complete wait, and stored start times sit ahead of real wall-clock — see "Sharing rides"), so counting `completed` as live would block materialisation until the stale start passed and could delete the genuinely-next occurrence.
 2. If no live future occurrence remains, generates the next date from the series template (pivot = latest existing ride's `starts_at`, or `now` if none) and inserts the ride + pace groups from the JSON template. It picks the **first generated date strictly after `now`** — pivoting off the latest ride keeps the weekly/biweekly cadence stable, but if the series went dormant (cron off for a while) the nearest on-cadence date can already be in the past, so those are skipped to always surface a real upcoming ride.
 3. Copies the series' **seed GPX** into the new occurrence's per-ride slot and regenerates its static preview (best-effort — see "Series seed GPX" below).
 
@@ -127,6 +167,10 @@ Once a ride flips to `status=completed`, the detail page grows a recap section: 
 The "estimated end" is **distance-based** (`estimateRideHours` in `src/lib/series.ts`): `max(2h, distance_km / 14)`, with a `4h` fallback when distance is null. 14 km/h is Burkam's chill-pace + bubur-stop average; the floor stops aggressive flips on very short rides. Tune the constants there if rides regularly run longer.
 
 **Reopening a completed ride:** `/admin/rides/<id>/edit` shows a **Reopen ride** button for ride managers when status is `completed` (`reopenRide` action). It flips the ride back to `scheduled` so a wrong date/time can be amended and the ride returns to the active `/rides` list. The edit form is editable for completed rides (only `cancelled` rides are read-only). **Gotcha:** auto-complete is distance/time-based, so reopening a ride whose start time is still in the past will get auto-completed straight back (cron + lazy-on-read). The intended flow is therefore reopen → edit the date to a future time → save, which is why `reopenRide` redirects back to the edit page (not the detail page) to position the admin to fix the date immediately.
+
+**Don't re-date a ride to run it again — duplicate it.** `ride_rsvps`, `ride_photos` and `recap_*` are keyed to the *ride row*, and neither `reopenRide` nor `updateRide` clears any of them. So reopening a finished ride and moving its date forward silently carries last time's rider list, photo grid and recap note into the "new" ride — the row *is* the old ride wearing a new date. This was a real production bug: one BTR7AM row served a weekly ride for six weeks and accumulated RSVPs from four different weeks, all still `status=in`, so the manager couldn't tell who had actually signed up (and the emergency-contact list was stale). Use **Duplicate ride** instead (below), or make it a proper series.
+
+**Duplicate ride:** `duplicateRide` (`src/app/admin/rides/actions.ts`) + a date picker on the edit page, rendered for **every** status including `cancelled` (rained out → re-run next week). Copies the plan only — title, meeting point, distance/elevation, route URL, description, GPX (via `copyRideGpxToRide`, which also rebuilds the preview) and pace groups — and nothing from the recap side. Cancelled paces clone as active. The clone is always standalone (`seriesId: null`) even from a series occurrence: a second live future occurrence would violate the one-occurrence invariant and get swept. Defaults to source start + 7 days and redirects to the clone's edit page.
 
 **Recap UX:**
 - Leader recap: any leader on the ride (any pace) or admin/organiser. `RecapEditor` toggles between view + edit.
@@ -238,7 +282,7 @@ Helper: `sendEmail()` + `emailTemplate()` in `src/lib/email.ts`. Provider-agnost
 Admin-only pages under `/admin` (in the layout nav for `role=admin`):
 - `/admin/members` — approval queue (pending/approved/rejected tabs), remove access
 - `/admin/types` — add/edit/disable ride types with color presets
-- `/admin/rides` — ride list; `/admin/rides/new` + `/admin/rides/[id]/edit`. Edit page has the **Mark as completed** button for ride managers when status is `scheduled`, and a **Reopen ride** button when status is `completed` (flips back to `scheduled` so a wrong date/time can be amended — see "Post-ride recap").
+- `/admin/rides` — ride list; `/admin/rides/new` + `/admin/rides/[id]/edit`. Edit page has the **Mark as completed** button for ride managers when status is `scheduled`, a **Reopen ride** button when status is `completed` (flips back to `scheduled` so a wrong date/time can be amended — see "Post-ride recap"), and **Duplicate ride** for every status.
 - `/admin/routes` — route library (admin-only): name + description + GPX upload, list with edit + delete + per-route preview
 - `/admin/content` — edit landing-page sections. Currently exposes the "About" block only ("achievements" is hidden via `HIDDEN_BLOCK_KEYS` until we revive the trophy case)
 - `/admin/gallery` — upload/delete/edit-alt photos for the landing carousel
@@ -252,6 +296,12 @@ Ride managers (`leader | organiser | admin`) can access `/admin/rides` but not t
 ```bash
 ./scripts/deploy.sh   # pulls, roles password sync, builds, migrates, starts
 ```
+
+What `deploy.sh` actually does, in order: ensure `uploads/` exists and is `chown 1001:1001` (the container's `nextjs` user — otherwise docker creates it root-owned and every upload fails) → **`git pull origin main`** → `docker compose up -d db` and poll its healthcheck → `ALTER USER ... WITH PASSWORD` to re-sync the DB role password with `.env` → `docker compose build burkam-web` → `up -d` (entrypoint migrates, then boots Next) → poll the web healthcheck.
+
+Two consequences worth knowing:
+- It always pulls **`origin main`**, regardless of the checked-out branch. Feature work on another branch (e.g. `burkam`) is not deployed until it lands on `main`.
+- The role-password re-sync exists because Postgres only honours `POSTGRES_PASSWORD` on **first volume init**. Changing that value in `.env` later would otherwise leave the stored role password stale and silently break `burkam-web`'s DB auth. It's idempotent; don't remove it.
 
 Key env (on the server at `.env`):
 - `POSTGRES_PASSWORD`, `PGHOST=burkam-db`, `PGUSER`, `PGDATABASE` — DB via PG* vars (not DATABASE_URL, which mangles passwords with special chars)
@@ -285,6 +335,8 @@ Migration runs automatically in `docker/entrypoint.sh` before Next.js boots. No 
 - Don't trust the JWT for security mutations — fetch fresh role from DB in the Server Action.
 - Don't set `PGHOST=db` in docker-compose — use the container name `burkam-db` to avoid DNS collisions with other compose projects on the same `server-net` (this was the root cause of hours of password-mismatch debugging in the original KHCC fork).
 - Don't reintroduce eager materialisation of recurring rides — the lazy approach is deliberate (member-list sanity + cleaner data).
+- Don't treat a `completed` occurrence as a live future one in `materializeSeries`' sweep, and don't let it become a delete candidate. Manually-completed rides are routinely still future-dated; the first mistake blocks materialisation, the second destroys a recap.
+- Don't re-date a finished ride to run it again — `ride_rsvps` / `ride_photos` / `recap_*` follow the row, so the "new" ride inherits last time's riders and photos. Use **Duplicate ride**.
 - Don't list every ride on `/admin/rides` — default to recent + future and disable RSC `prefetch` on the per-row Edit links. Wide row counts × Safari prefetch storms = self-DoS via the nginx rate-limit zone.
 - Don't use `localhost` in container healthchecks — Next.js binds IPv4 `0.0.0.0` only; `localhost` resolves to `::1` and the check fails forever. Use `127.0.0.1`.
 - Don't add features from Phase 2/3 (trips, Strava, races, leaderboard, live safety) — explicitly deferred. See `docs/REQUIREMENTS_V2.html` for the full status of every requirement.
@@ -295,3 +347,15 @@ Migration runs automatically in `docker/entrypoint.sh` before Next.js boots. No 
 - Don't bake server-only secrets (`MAPBOX_SERVER_TOKEN`, `AUTH_SECRET`, `AUTH_GOOGLE_SECRET`, `POSTGRES_PASSWORD`, `SMTP_PASSWORD`) into Dockerfile `ARG`s — keep them as runtime `environment:` only so they don't end up in the build context or layers.
 - Don't add a new `/uploads/<subdir>/` without also adding the subdir to `ALLOWED_SUBDIRS` in `src/app/uploads/[...path]/route.ts`. Files write fine but the URL 404s and you get broken-image icons everywhere — silent and confusing.
 - Don't restore the WhatsApp share's `timeZone: "Asia/Singapore"` without first fixing the underlying datetime-local storage. The current code intentionally pins to UTC so it matches the server-rendered `toLocaleString(undefined)` everywhere else; flipping just the share back to SGT will reintroduce the "ride at 7 AM, share says 3 PM" bug from the conversation history.
+- Don't import `@/db`, `pg`, `sharp`, `nodemailer`, or `@/auth` into `src/auth.config.ts` — it's the edge-runtime config that `middleware.ts` builds on, and Node-only modules break the middleware bundle. Role/status checks belong in Server Components/Actions, not middleware.
+- Don't raise the upload size in one place only — `serverActions.bodySizeLimit` (`next.config.ts`) and `client_max_body_size` (`nginx/burkam.conf`) are both 10mb and must move together.
+- Don't add a test-runner assertion to a "done" claim — there is no test suite. `npm run lint` + `npm run typecheck` are the verification bar.
+
+## Known leftovers from the KHCC fork
+
+Cosmetic inconsistencies that are safe to ignore but confusing if you assume they're intentional:
+- `next.config.ts` → `images.remotePatterns` still allowlists `*.supabase.co` even though Supabase was removed. Harmless dead config (`lh3.googleusercontent.com`, for Google avatars, is the live one).
+- Tailwind palette token names (`coral-*`, `maroon-*`, `cream-*`, `flash-*`) — see "Brand & UI"; values were redefined, names weren't.
+- Legacy `A` / `B` / `C` `ride_types` rows still exist, deactivated by migration `0009_burkam_pace_seed.sql`.
+- `docker-compose.yml` has a stale comment describing SMTP as a "Gmail relay via app password" — it's Brevo now.
+
