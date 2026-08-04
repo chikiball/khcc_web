@@ -12,15 +12,44 @@ const bricolage = Bricolage_Grotesque({
   display: "swap",
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://burkam.nandharu.uk";
+const SITE_DESCRIPTION = "Bubur Kampung — chill weekend rides along East Coast & Changi.";
+
 export const metadata: Metadata = {
+  // Needed so relative og:image paths resolve to absolute URLs — chat apps
+  // reject relative ones.
+  metadataBase: new URL(SITE_URL),
   title: { default: "Burkam", template: "%s · Burkam" },
-  description: "Bubur Kampung — chill weekend rides along East Coast & Changi.",
+  description: SITE_DESCRIPTION,
   applicationName: "Burkam",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "Burkam",
+  },
+  // Link previews (WhatsApp, Telegram, iMessage). Without an explicit
+  // og:image, scrapers fall back to the largest icon they can find —
+  // icon-512.png — and any image 300px or larger renders as a full-width
+  // preview card, which is why a shared ride used to paste in with a huge
+  // logo. Pinning a 192px image keeps it a small square thumbnail.
+  //
+  // Note: these come from /login, not the ride page. /rides/* is behind
+  // middleware, so an unauthenticated scraper is redirected there — per-ride
+  // openGraph tags would never be read.
+  openGraph: {
+    type: "website",
+    siteName: "Burkam",
+    title: "Burkam",
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+    images: [{ url: "/icon-192.png", width: 192, height: 192, alt: "Burkam" }],
+  },
+  twitter: {
+    card: "summary", // "summary" = small square thumbnail; "summary_large_image" = the big card
+    title: "Burkam",
+    description: SITE_DESCRIPTION,
+    images: ["/icon-192.png"],
   },
   icons: {
     icon: [
