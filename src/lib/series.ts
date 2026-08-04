@@ -72,11 +72,23 @@ export async function materializeSeries(series: RideSeries): Promise<number> {
     .where(and(eq(schema.rides.seriesId, series.id), gt(schema.rides.startsAt, now)))
     .orderBy(asc(schema.rides.startsAt));
 
-  // Step 2 — sweep extras. Keep the soonest non-cancelled future ride; delete
+  // Step 2 — sweep extras. Keep the soonest still-upcoming future ride; delete
   // the rest if they have no RSVPs (FK cascade handles pace groups).
-  const liveFuture = future.filter((r) => r.status !== "cancelled");
+  //
+  // "Live" means the ride is still going to happen, so both `cancelled` and
+  // `completed` free the slot for the next occurrence. `completed` matters
+  // because a future-dated ride can be marked completed by hand (the manual
+  // button exists to skip the auto-complete wait, and stored start times can
+  // sit hours ahead of the real ride) — treating that as live would block
+  // materialisation until the stale start time passed.
+  const liveFuture = future.filter(
+    (r) => r.status === "scheduled" || r.status === "weather-watch",
+  );
   const keepId = liveFuture[0]?.id;
-  const candidatesToDelete = future.filter((r) => r.id !== keepId).map((r) => r.id);
+  // Never sweep a completed occurrence: it owns a recap note and photos.
+  const candidatesToDelete = future
+    .filter((r) => r.id !== keepId && r.status !== "completed")
+    .map((r) => r.id);
 
   if (candidatesToDelete.length > 0) {
     const withRsvps = await db
