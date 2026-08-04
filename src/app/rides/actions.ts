@@ -109,16 +109,30 @@ export async function addRiderToPace(rideId: string, paceGroupId: string, userId
 const PHOTOS_PER_UPLOADER_PER_RIDE = 3;
 
 /**
+ * Result shape for the recap photo actions. These are driven from a client
+ * component, so they **return** failures instead of throwing: a throw out of
+ * a server action passed to <form action> has no error boundary to catch it
+ * and surfaces as "Application error: a client-side exception has occurred",
+ * which tells the member nothing and loses their photo. Same reasoning as the
+ * FormError pattern in src/app/admin/rides/actions.ts, different mechanism.
+ */
+export type PhotoActionState = { ok: true } | { error: string } | null;
+
+/**
  * Upload a recap photo for a completed ride. Any approved member can post,
  * up to 3 photos per uploader per ride. Restricted to status=completed —
  * recap is for after-the-fact storytelling, not pre-ride coordination.
  */
-export async function uploadRidePhoto(rideId: string, formData: FormData) {
+export async function uploadRidePhoto(
+  rideId: string,
+  _prev: PhotoActionState,
+  formData: FormData,
+): Promise<PhotoActionState> {
   const user = await requireApproved();
 
   const file = formData.get("photo");
   if (!(file instanceof File) || file.size === 0) {
-    throw new Error("Pick a photo to upload.");
+    return { error: "Pick a photo to upload." };
   }
 
   const [ride] = await db
@@ -126,9 +140,9 @@ export async function uploadRidePhoto(rideId: string, formData: FormData) {
     .from(schema.rides)
     .where(eq(schema.rides.id, rideId))
     .limit(1);
-  if (!ride) throw new Error("Ride not found.");
+  if (!ride) return { error: "Ride not found." };
   if (ride.status !== "completed") {
-    throw new Error("Photos can only be added to completed rides.");
+    return { error: "Photos can only be added to completed rides." };
   }
 
   const existing = await db
@@ -141,7 +155,7 @@ export async function uploadRidePhoto(rideId: string, formData: FormData) {
       ),
     );
   if (existing.length >= PHOTOS_PER_UPLOADER_PER_RIDE) {
-    throw new Error(`You've already uploaded ${PHOTOS_PER_UPLOADER_PER_RIDE} photos for this ride.`);
+    return { error: `You've already uploaded ${PHOTOS_PER_UPLOADER_PER_RIDE} photos for this ride.` };
   }
 
   const [row] = await db
@@ -156,19 +170,30 @@ export async function uploadRidePhoto(rideId: string, formData: FormData) {
       .set({ imageUrl: url })
       .where(eq(schema.ridePhotos.id, row.id));
   } catch (err) {
+    // Roll back the placeholder row so a failed resize/write leaves no
+    // half-written photo behind (the /rides/past collage skips empty
+    // imageUrl, but the detail grid would render a broken tile).
     await db.delete(schema.ridePhotos).where(eq(schema.ridePhotos.id, row.id));
-    throw err;
+    console.error("[ride photo] upload failed", err);
+    // processRidePhoto's messages are written for members ("Image is too big",
+    // "Could not read that image…"); anything else is ours, not theirs.
+    return {
+      error: err instanceof Error && err.message
+        ? err.message
+        : "Could not save that photo. Try again.",
+    };
   }
 
   revalidatePath(`/rides/${rideId}`);
   revalidatePath("/rides/past");
+  return { ok: true };
 }
 
 /**
  * Delete a ride photo. Allowed for the original uploader or any admin /
  * organiser / leader on the ride.
  */
-export async function deleteRidePhoto(photoId: string) {
+export async function deleteRidePhoto(photoId: string): Promise<PhotoActionState> {
   const user = await requireApproved();
 
   const [photo] = await db
@@ -180,18 +205,19 @@ export async function deleteRidePhoto(photoId: string) {
     .from(schema.ridePhotos)
     .where(eq(schema.ridePhotos.id, photoId))
     .limit(1);
-  if (!photo) return;
+  if (!photo) return { ok: true }; // already gone — nothing to report
 
   const isUploader = photo.uploadedBy === user.id;
   const isManager = canManageRides(user.role);
   if (!isUploader && !isManager) {
-    throw new Error("You can only delete your own photos.");
+    return { error: "You can only delete your own photos." };
   }
 
   await db.delete(schema.ridePhotos).where(eq(schema.ridePhotos.id, photoId));
   await deleteRidePhotoFiles(photoId);
   revalidatePath(`/rides/${photo.rideId}`);
   revalidatePath("/rides/past");
+  return { ok: true };
 }
 
 /**

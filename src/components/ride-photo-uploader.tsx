@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { uploadRidePhoto, deleteRidePhoto } from "@/app/rides/actions";
 
 const MAX_DIMENSION = 2000;
@@ -59,6 +59,20 @@ export function RidePhotoUploader({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
+  const [state, formAction, submitting] = useActionState(
+    uploadRidePhoto.bind(null, rideId),
+    null,
+  );
+
+  // Clear the picker only once the upload actually succeeded — on failure the
+  // chosen file stays put so the member can just hit Post again.
+  useEffect(() => {
+    if (state && "ok" in state) {
+      setFilename(null);
+      setPreviewUrl(null);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }, [state]);
 
   if (uploadsRemaining <= 0) {
     return (
@@ -67,8 +81,6 @@ export function RidePhotoUploader({
       </p>
     );
   }
-
-  const action = uploadRidePhoto.bind(null, rideId);
 
   const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.target;
@@ -97,21 +109,14 @@ export function RidePhotoUploader({
     }
   };
 
+  const serverError = state && "error" in state ? state.error : null;
+
   return (
     <form
       ref={formRef}
-      action={action}
+      action={formAction}
       encType="multipart/form-data"
       className="rounded-2xl bg-white ring-1 ring-maroon-200/60 p-4 space-y-3"
-      onSubmit={() => {
-        // Reset preview state after submit; the page revalidates and the
-        // uploaded photo appears in the grid below.
-        setTimeout(() => {
-          setFilename(null);
-          setPreviewUrl(null);
-          if (inputRef.current) inputRef.current.value = "";
-        }, 0);
-      }}
     >
       <label className="block cursor-pointer rounded-xl ring-1 ring-maroon-200 ring-dashed bg-cream-50 hover:bg-cream-100 px-4 py-5 text-center">
         {previewUrl ? (
@@ -134,13 +139,15 @@ export function RidePhotoUploader({
           className="sr-only"
         />
       </label>
-      {error && <p className="text-xs text-flash-600">{error}</p>}
+      {(error ?? serverError) && (
+        <p className="text-xs text-flash-600">{error ?? serverError}</p>
+      )}
       <button
         type="submit"
-        disabled={!filename}
+        disabled={!filename || submitting}
         className="w-full inline-flex items-center justify-center rounded-2xl bg-coral-500 hover:bg-coral-600 disabled:opacity-50 text-cream-50 px-5 py-2 text-sm font-semibold active:scale-[0.98] transition-transform"
       >
-        Post photo
+        {submitting ? "Posting…" : "Post photo"}
       </button>
     </form>
   );
@@ -149,6 +156,7 @@ export function RidePhotoUploader({
 export function DeleteRidePhotoButton({ photoId }: { photoId: string }) {
   const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   if (!confirming) {
     return (
@@ -164,22 +172,36 @@ export function DeleteRidePhotoButton({ photoId }: { photoId: string }) {
 
   return (
     <span className="absolute top-1 right-1 inline-flex items-center gap-1.5 text-xs bg-black/70 text-white rounded-full px-2 py-0.5">
+      {error ? (
+        <span className="max-w-[12rem]">{error}</span>
+      ) : (
+        <>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                const result = await deleteRidePhoto(photoId);
+                if (result && "error" in result) setError(result.error);
+              })
+            }
+            className="font-semibold"
+          >
+            {pending ? "…" : "Delete"}
+          </button>
+          <span className="opacity-50">·</span>
+        </>
+      )}
       <button
         type="button"
-        disabled={pending}
-        onClick={() => startTransition(async () => deleteRidePhoto(photoId))}
-        className="font-semibold"
-      >
-        {pending ? "…" : "Delete"}
-      </button>
-      <span className="opacity-50">·</span>
-      <button
-        type="button"
-        onClick={() => setConfirming(false)}
+        onClick={() => {
+          setConfirming(false);
+          setError(null);
+        }}
         disabled={pending}
         className="opacity-80"
       >
-        Cancel
+        {error ? "Close" : "Cancel"}
       </button>
     </span>
   );
