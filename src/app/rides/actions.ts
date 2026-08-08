@@ -47,6 +47,13 @@ export async function toggleRsvp(
 }
 
 /**
+ * Result shape for `addRiderToPace`. It's driven from a client component, so
+ * it returns failures rather than throwing — see the note on
+ * `PhotoActionState` below for why a throw there is so costly.
+ */
+export type AddRiderState = { ok: true } | { error: string };
+
+/**
  * Manually add a rider to a pace group on behalf of someone who didn't RSVP
  * themselves. Manager-only (leader / organiser / admin) — role re-read from
  * DB, never trusted from the JWT. The added rider can still remove themselves
@@ -54,8 +61,19 @@ export async function toggleRsvp(
  *
  * Upserts on (ride_id, user_id): if the target is already in another pace on
  * this ride, this moves them to the chosen pace (mirrors the self-switch).
+ *
+ * Allowed on `completed` rides on purpose. Recording who actually turned up is
+ * a post-ride act, like the recap note and the photos — and auto-complete is
+ * unconditional and distance-based, so reopening a finished ride to backfill an
+ * attendee doesn't work: the next page view flips it straight back. Only
+ * `cancelled` is closed to new riders. Members still can't self-RSVP after the
+ * fact — the RSVP button is hidden on completed rides.
  */
-export async function addRiderToPace(rideId: string, paceGroupId: string, userId: string) {
+export async function addRiderToPace(
+  rideId: string,
+  paceGroupId: string,
+  userId: string,
+): Promise<AddRiderState> {
   const actor = await requireApproved();
 
   const [actorRow] = await db
@@ -64,7 +82,7 @@ export async function addRiderToPace(rideId: string, paceGroupId: string, userId
     .where(eq(schema.users.id, actor.id))
     .limit(1);
   if (!actorRow || !canManageRides(actorRow.role)) {
-    throw new Error("Only ride managers can add riders.");
+    return { error: "Only ride managers can add riders." };
   }
 
   const [ride] = await db
@@ -72,9 +90,9 @@ export async function addRiderToPace(rideId: string, paceGroupId: string, userId
     .from(schema.rides)
     .where(eq(schema.rides.id, rideId))
     .limit(1);
-  if (!ride) throw new Error("Ride not found.");
-  if (ride.status === "cancelled" || ride.status === "completed") {
-    throw new Error("This ride is closed to new riders.");
+  if (!ride) return { error: "Ride not found." };
+  if (ride.status === "cancelled") {
+    return { error: "This ride is cancelled." };
   }
 
   const [pace] = await db
@@ -82,8 +100,8 @@ export async function addRiderToPace(rideId: string, paceGroupId: string, userId
     .from(schema.ridePaceGroups)
     .where(and(eq(schema.ridePaceGroups.id, paceGroupId), eq(schema.ridePaceGroups.rideId, rideId)))
     .limit(1);
-  if (!pace) throw new Error("Pace group not found.");
-  if (pace.status === "cancelled") throw new Error("That pace group is cancelled.");
+  if (!pace) return { error: "Pace group not found." };
+  if (pace.status === "cancelled") return { error: "That pace group is cancelled." };
 
   const [target] = await db
     .select({ id: schema.users.id, status: schema.users.status })
@@ -91,7 +109,7 @@ export async function addRiderToPace(rideId: string, paceGroupId: string, userId
     .where(eq(schema.users.id, userId))
     .limit(1);
   if (!target || target.status !== "approved") {
-    throw new Error("Rider must be an approved member.");
+    return { error: "Rider must be an approved member." };
   }
 
   await db
@@ -103,7 +121,9 @@ export async function addRiderToPace(rideId: string, paceGroupId: string, userId
     });
 
   revalidatePath("/rides");
+  revalidatePath("/rides/past");
   revalidatePath(`/rides/${rideId}`);
+  return { ok: true };
 }
 
 const PHOTOS_PER_UPLOADER_PER_RIDE = 3;

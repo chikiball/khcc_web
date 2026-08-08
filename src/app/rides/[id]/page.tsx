@@ -111,8 +111,11 @@ export default async function RideDetailPage({ params }: { params: Params }) {
 
   // Managers can add riders on behalf of members who didn't RSVP themselves —
   // fetch the approved roster only when that control will actually render.
-  const rideOpen = !isCancelled && !isCompleted;
-  const approvedMembers = isManager && rideOpen
+  // Completed rides included: recording who actually turned up is a post-ride
+  // act, and auto-complete makes "reopen it first" unworkable (the next page
+  // view flips it back). Only cancelled rides are closed.
+  const ridersEditable = !isCancelled;
+  const approvedMembers = isManager && ridersEditable
     ? await db
         .select({ id: schema.users.id, name: schema.users.name })
         .from(schema.users)
@@ -343,7 +346,7 @@ export default async function RideDetailPage({ params }: { params: Params }) {
             const isCancelledPace = pg.status === "cancelled";
             const effectiveDist = pg.distanceKm ?? ride.distanceKm;
             const effectiveElev = pg.elevationM ?? ride.elevationM;
-            const canAddRiders = isManager && rideOpen && !isCancelledPace;
+            const canAddRiders = isManager && ridersEditable && !isCancelledPace;
             const eligibleMembers = canAddRiders
               ? approvedMembers.filter((m) => !pgRsvps.some((r) => r.userId === m.id))
               : [];
@@ -425,6 +428,7 @@ export default async function RideDetailPage({ params }: { params: Params }) {
                       rideId={ride.id}
                       paceGroupId={pg.id}
                       members={eligibleMembers}
+                      completed={isCompleted}
                     />
                   </div>
                 )}

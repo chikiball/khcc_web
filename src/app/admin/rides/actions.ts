@@ -216,22 +216,12 @@ async function persistGpxForRide(gpx: GpxSource, rideId: string): Promise<void> 
  * manager can tick the confirmation to proceed.
  */
 async function assertSafeRedate(
+  current: { startsAt: Date; recapNote: string | null; recapAt: Date | null },
   rideId: string,
   input: RideInput,
   formData: FormData,
 ): Promise<void> {
   if (String(formData.get(REDATE_CONFIRM_FIELD) ?? "") === "1") return;
-
-  const [current] = await db
-    .select({
-      startsAt: schema.rides.startsAt,
-      recapNote: schema.rides.recapNote,
-      recapAt: schema.rides.recapAt,
-    })
-    .from(schema.rides)
-    .where(eq(schema.rides.id, rideId))
-    .limit(1);
-  if (!current) return; // updateRide's own UPDATE will no-op
 
   const nextStart = new Date(input.starts_at);
   if (Number.isNaN(nextStart.getTime())) throw new FormError("Date and time is not a valid date.");
@@ -401,13 +391,24 @@ export async function createRide(formData: FormData) {
 export async function updateRide(rideId: string, formData: FormData) {
   const manager = await requireRideManager();
 
+  const [current] = await db
+    .select({
+      startsAt: schema.rides.startsAt,
+      status: schema.rides.status,
+      recapNote: schema.rides.recapNote,
+      recapAt: schema.rides.recapAt,
+    })
+    .from(schema.rides)
+    .where(eq(schema.rides.id, rideId))
+    .limit(1);
+
   let input: RideInput;
   let paceGroups: PaceGroupInput[];
   let gpx: GpxSource | null;
   try {
     input = parseRideInput(formData);
     paceGroups = parsePaceGroups(formData);
-    await assertSafeRedate(rideId, input, formData);
+    if (current) await assertSafeRedate(current, rideId, input, formData);
     gpx = await maybeResolveGpxSource(formData, input);
   } catch (err) {
     if (err instanceof FormError) {
@@ -421,9 +422,25 @@ export async function updateRide(rideId: string, formData: FormData) {
     throw err;
   }
 
+  // A completed ride moved to a future start hasn't happened yet — put it back
+  // on the schedule. Without this, the new date is written but `status` stays
+  // `completed`, stranding the ride: hidden from /rides (which excludes
+  // completed) and sitting in /rides/past with a date that hasn't arrived.
+  //
+  // It also makes the documented reopen → fix-the-date → save flow reliable.
+  // Auto-complete is unconditional and distance-based, so cron or a page view
+  // can flip a reopened past-dated ride straight back to `completed` between
+  // the reopen and the save; this makes that flip harmless instead of
+  // something the manager has to race.
+  const reschedule = current?.status === "completed" && new Date(input.starts_at) > new Date();
+
   await db
     .update(schema.rides)
-    .set({ ...rideRow(input), updatedAt: new Date() })
+    .set({
+      ...rideRow(input),
+      ...(reschedule ? { status: "scheduled" as const } : {}),
+      updatedAt: new Date(),
+    })
     .where(eq(schema.rides.id, rideId));
 
   await syncPaceGroups(rideId, paceGroups, manager.id);
