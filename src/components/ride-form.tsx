@@ -27,6 +27,7 @@ export function RideForm({
   libraryRoutes,
   submitLabel,
   readOnly,
+  confirmRedate,
 }: {
   action: (formData: FormData) => Promise<void>;
   defaultValues?: Ride;
@@ -36,6 +37,11 @@ export function RideForm({
   libraryRoutes?: LibraryRouteOption[];
   submitLabel: string;
   readOnly?: boolean;
+  /**
+   * Render the "move it anyway" checkbox. Set only after `updateRide` blocked
+   * a past → future re-date on a ride that still holds riders/photos/recap.
+   */
+  confirmRedate?: boolean;
 }) {
   const v = defaultValues ?? {};
 
@@ -152,6 +158,23 @@ export function RideForm({
             Recurring rides materialise 4 weeks in advance. A weekly cron extends them automatically.
           </p>
         </fieldset>
+      )}
+
+      {!readOnly && confirmRedate && (
+        <label className="flex items-start gap-3 rounded-2xl bg-flash-500/10 ring-1 ring-flash-500/40 px-4 py-3 cursor-pointer">
+          <input
+            type="checkbox"
+            name="confirm_redate"
+            value="1"
+            className="mt-0.5 accent-flash-500"
+          />
+          <span className="text-sm text-ink">
+            <span className="font-semibold">Move this ride anyway.</span> Its existing
+            riders, photos and recap stay attached and the old date disappears from
+            Past rides. Only do this to correct a wrong date — to run the ride again,
+            use <strong>Duplicate ride</strong> below.
+          </span>
+        </label>
       )}
 
       {!readOnly && (

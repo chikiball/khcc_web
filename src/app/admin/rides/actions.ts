@@ -8,7 +8,7 @@ import { generateRoutePreview } from "@/lib/static-map";
 import { materializeSeries } from "@/lib/series";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { asc, and, eq, inArray } from "drizzle-orm";
+import { asc, and, count, eq, inArray } from "drizzle-orm";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -26,6 +26,26 @@ class FormError extends Error {
     this.name = "FormError";
   }
 }
+
+/**
+ * A FormError raised by the re-date guard below. Distinct from the rest so the
+ * edit page can re-render with an explicit "move it anyway" confirmation rather
+ * than a dead end — the block is a speed bump, not a prohibition.
+ */
+class RedateError extends FormError {
+  constructor(message: string) {
+    super(message);
+    this.name = "RedateError";
+  }
+}
+
+/**
+ * Form field the confirmation checkbox posts to bypass the re-date guard.
+ * Not exported — a `"use server"` module may only export async functions, so
+ * the matching `name="confirm_redate"` is written out literally in
+ * `src/components/ride-form.tsx`. Keep the two in step.
+ */
+const REDATE_CONFIRM_FIELD = "confirm_redate";
 
 type RideInput = {
   title: string;
@@ -177,6 +197,82 @@ async function persistGpxForRide(gpx: GpxSource, rideId: string): Promise<void> 
   await tryGeneratePreview(gpx.text, rideId);
 }
 
+/**
+ * Refuse to push a ride that has already run forward onto a future date while
+ * it still carries that running's riders, photos or recap.
+ *
+ * `ride_rsvps`, `ride_photos` and `recap_*` are keyed to the *ride row*, and
+ * neither `reopenRide` nor `updateRide` clears them — so re-dating a finished
+ * ride doesn't create a new ride, it makes the old one wear a new date. Last
+ * time's rider list and photo grid come along, and the original date vanishes
+ * from `/rides/past` because there was only ever one row. `duplicateRide` is
+ * the tool for running a ride again.
+ *
+ * Deliberately narrow, so ordinary edits are untouched:
+ *  - retiming an upcoming ride (stored start still in the future) → allowed;
+ *  - correcting a past ride's date to another past date → allowed;
+ *  - a ride with no riders, photos or recap → allowed (nothing to carry).
+ * Only past → future on a row with history is blocked, and even then the
+ * manager can tick the confirmation to proceed.
+ */
+async function assertSafeRedate(
+  rideId: string,
+  input: RideInput,
+  formData: FormData,
+): Promise<void> {
+  if (String(formData.get(REDATE_CONFIRM_FIELD) ?? "") === "1") return;
+
+  const [current] = await db
+    .select({
+      startsAt: schema.rides.startsAt,
+      recapNote: schema.rides.recapNote,
+      recapAt: schema.rides.recapAt,
+    })
+    .from(schema.rides)
+    .where(eq(schema.rides.id, rideId))
+    .limit(1);
+  if (!current) return; // updateRide's own UPDATE will no-op
+
+  const nextStart = new Date(input.starts_at);
+  if (Number.isNaN(nextStart.getTime())) throw new FormError("Date and time is not a valid date.");
+
+  const now = new Date();
+  if (current.startsAt >= now) return; // hasn't run yet
+  if (nextStart <= now) return; // still a past date — a correction, not a re-run
+
+  const [rsvps] = await db
+    .select({ n: count() })
+    .from(schema.rideRsvps)
+    .where(eq(schema.rideRsvps.rideId, rideId));
+  const [photos] = await db
+    .select({ n: count() })
+    .from(schema.ridePhotos)
+    .where(eq(schema.ridePhotos.rideId, rideId));
+
+  const riderCount = Number(rsvps?.n ?? 0);
+  const photoCount = Number(photos?.n ?? 0);
+
+  const carries: string[] = [];
+  if (riderCount > 0) carries.push(`${riderCount} rider${riderCount === 1 ? "" : "s"}`);
+  if (photoCount > 0) carries.push(`${photoCount} photo${photoCount === 1 ? "" : "s"}`);
+  if (current.recapNote || current.recapAt) carries.push("a recap note");
+  if (!carries.length) return;
+
+  // Pinned to UTC to match how dates are displayed everywhere else — see the
+  // "Sharing rides" note about datetime-local being stored as server-local.
+  const ran = current.startsAt.toLocaleString("en-GB", {
+    timeZone: "UTC",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  throw new RedateError(
+    `This ride already ran on ${ran} and still holds ${carries.join(", ")}. ` +
+      `Moving its date would carry all of that into the new ride and drop ${ran} ` +
+      `from Past rides — use “Duplicate ride” at the bottom of this page instead.`,
+  );
+}
+
 async function syncPaceGroups(
   rideId: string,
   paceGroups: PaceGroupInput[],
@@ -311,10 +407,16 @@ export async function updateRide(rideId: string, formData: FormData) {
   try {
     input = parseRideInput(formData);
     paceGroups = parsePaceGroups(formData);
+    await assertSafeRedate(rideId, input, formData);
     gpx = await maybeResolveGpxSource(formData, input);
   } catch (err) {
     if (err instanceof FormError) {
-      redirect(`/admin/rides/${rideId}/edit?error=${encodeURIComponent(err.message)}`);
+      // RedateError re-renders the form with a confirmation checkbox so the
+      // manager can override it deliberately; other errors just show inline.
+      const confirm = err instanceof RedateError ? "&redate=1" : "";
+      redirect(
+        `/admin/rides/${rideId}/edit?error=${encodeURIComponent(err.message)}${confirm}`,
+      );
     }
     throw err;
   }

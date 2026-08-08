@@ -11,7 +11,7 @@ import { PaceCancelButtons } from "@/components/pace-cancel-buttons";
 export const metadata = { title: "Edit ride" };
 
 type Params = Promise<{ id: string }>;
-type SearchParams = Promise<{ error?: string }>;
+type SearchParams = Promise<{ error?: string; redate?: string }>;
 
 function toLocalDateTimeInput(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -26,7 +26,7 @@ export default async function EditRidePage({
   searchParams: SearchParams;
 }) {
   const { id } = await params;
-  const { error } = await searchParams;
+  const { error, redate } = await searchParams;
 
   const [ride, seriesResult] = await Promise.all([
     db.select().from(schema.rides).where(eq(schema.rides.id, id)).limit(1).then((r) => r[0]),
@@ -97,6 +97,7 @@ export default async function EditRidePage({
         libraryRoutes={libraryRoutes}
         submitLabel="Save changes"
         readOnly={isCancelled}
+        confirmRedate={redate === "1"}
         defaultPaceGroups={isCancelled ? defaultPaceGroups : defaultPaceGroups}
         defaultValues={{
           title: ride.title,
