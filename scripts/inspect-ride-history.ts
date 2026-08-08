@@ -12,19 +12,68 @@
  *
  * Run via:
  *   npx tsx scripts/inspect-ride-history.ts "Ngopi"
+ *   npx tsx scripts/inspect-ride-history.ts --redated   # audit every title
  *   docker exec burkam-web node node_modules/tsx/dist/cli.mjs scripts/inspect-ride-history.ts "Ngopi"
  */
 
 import { db, schema } from "../src/db";
-import { asc, eq, ilike } from "drizzle-orm";
+import { asc, eq, ilike, sql } from "drizzle-orm";
 
 const fmt = (d: Date | null) =>
   d ? d.toISOString().replace("T", " ").slice(0, 19) + "Z" : "—";
 
+/**
+ * A row whose starts_at is far later than its created_at was almost certainly
+ * re-dated forward rather than created for that date. Three weeks is well past
+ * any normal "planned it early" gap for weekend rides.
+ */
+const REDATE_SUSPICION_DAYS = 21;
+
+/** Compact one-line audit of every row that looks re-dated, any title. */
+async function auditRedated() {
+  const rides = await db
+    .select({
+      id: schema.rides.id,
+      title: schema.rides.title,
+      startsAt: schema.rides.startsAt,
+      createdAt: schema.rides.createdAt,
+      status: schema.rides.status,
+    })
+    .from(schema.rides)
+    .where(
+      sql`${schema.rides.startsAt} - ${schema.rides.createdAt} > ${sql.raw(
+        `interval '${REDATE_SUSPICION_DAYS} days'`,
+      )}`,
+    )
+    .orderBy(asc(schema.rides.startsAt));
+
+  if (!rides.length) {
+    console.log(`No ride row starts more than ${REDATE_SUSPICION_DAYS} days after it was created.`);
+    return;
+  }
+
+  console.log(
+    `${rides.length} row(s) whose starts_at is >${REDATE_SUSPICION_DAYS} days after created_at —\n` +
+      `each one was probably re-dated, carrying its riders/photos/recap forward:\n`,
+  );
+  for (const r of rides) {
+    const gap = Math.round((r.startsAt.getTime() - r.createdAt.getTime()) / 864e5);
+    console.log(
+      `  ${fmt(r.startsAt)}  ${String(gap).padStart(3)}d  ${r.status.padEnd(13)} ${r.id}  ${r.title}`,
+    );
+  }
+  console.log(`\nInspect one in full with: inspect-ride-history.ts "<title>"`);
+}
+
 async function main() {
+  if (process.argv.includes("--redated")) {
+    await auditRedated();
+    return;
+  }
+
   const needle = process.argv[2];
   if (!needle) {
-    console.error('Usage: inspect-ride-history.ts "<title substring>"');
+    console.error('Usage: inspect-ride-history.ts "<title substring>" | --redated');
     process.exit(1);
   }
 
@@ -47,6 +96,13 @@ async function main() {
     console.log(`title       ${ride.title}`);
     console.log(`starts_at   ${fmt(ride.startsAt)}`);
     console.log(`status      ${ride.status}`);
+    if (ride.status === "cancelled") {
+      // A cancelled row never appears on /rides/past — worth spelling out,
+      // because a cancelled row parked on the "missing" date looks like the
+      // ride is there when the archive won't show it.
+      console.log(`cancelled   ${fmt(ride.cancelledAt)}  ${ride.cancelledReason ?? "—"}`);
+      console.log(`            (cancelled rides are hidden from /rides/past)`);
+    }
     console.log(`series_id   ${ride.seriesId ?? "— (one-off)"}`);
     console.log(`created_at  ${fmt(ride.createdAt)}`);
     console.log(`updated_at  ${fmt(ride.updatedAt)}`);
@@ -57,7 +113,7 @@ async function main() {
 
     // A row whose created_at is far older than its starts_at was almost
     // certainly re-dated forward rather than created for that date.
-    if (ride.createdAt && ride.startsAt.getTime() - ride.createdAt.getTime() > 21 * 864e5) {
+    if (ride.createdAt && ride.startsAt.getTime() - ride.createdAt.getTime() > REDATE_SUSPICION_DAYS * 864e5) {
       console.log(
         `⚠ starts_at is ${Math.round(
           (ride.startsAt.getTime() - ride.createdAt.getTime()) / 864e5,
